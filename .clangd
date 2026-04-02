@@ -1,0 +1,11 @@
+CompileFlags:
+  Add:
+    - -Wno-reserved-user-defined-literal
+    - --target=riscv64-unknown-linux-musl
+  Remove:
+    - -march=*
+Diagnostics:
+  Suppress:
+    - reserved-user-defined-literal
+    - type_unsupported
+  UnusedIncludes: None

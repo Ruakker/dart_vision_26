@@ -1,0 +1,40 @@
+{
+  "exposure": {
+    "auto_target_luma": 30,
+    "manual_exposure_time_us": 25000
+  },
+  "model": {
+    "threshold": 0.3
+  },
+  "record": {
+    "enable": false,
+    "path": "/root/record"
+  },
+  "tracker": {
+    "process_noise": {
+      "yaw": 50.0,
+      "pitch": 50.0
+    },
+    "measurement_noise": {
+      "yaw": 0.001,
+      "pitch": 0.001
+    },
+    "initial_covariance": {
+      "yaw": 10.0,
+      "v_yaw": 2.0,
+      "pitch": 10.0,
+      "v_pitch": 2.0
+    },
+    "state_machine": {
+      "min_confirm_frames": 5,
+      "lost_frames": 10,
+      "aspect_ratio_thresh": 1.5
+    },
+    "timing": {
+      "dt_default": 0.0333333,
+      "dt_min": 0.005,
+      "dt_max": 0.2
+    }
+  }
+}
+
