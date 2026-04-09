@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <pthread.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <time.h>
 
 #include "cvi_tdl.h"
@@ -28,6 +29,8 @@ typedef struct {
   Kalman kf;                         // 卡尔曼状态
   TrackOutput track;                 // 追踪输出（供绘制/UART）
   pthread_mutex_t track_mutex;       // 保护 track
+  pthread_cond_t track_cv;           // 追踪更新通知（唤醒发送线程）
+  uint64_t track_seq;                // 追踪更新序号（防止丢唤醒）
   struct timespec track_ts;          // 上次卡尔曼更新时刻（单调时钟）
   bool track_ts_valid;               // 时间戳有效标记
   bool record_enable;                // 是否录制

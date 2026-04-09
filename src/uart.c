@@ -103,6 +103,7 @@ void send_detection(int fd, uint8_t detected, float yaw_deg, float pitch_deg, fl
   g_detection_payload.v_yaw = v_yaw_deg;
   g_detection_payload.v_pitch = v_pitch_deg;
   g_detection_payload.distance = distance_m;
+  printf("Send yaw: %.2f\n", yaw_deg);
 
   Send_Cmd_Packet((void *)(intptr_t)fd, tx_buffer, sizeof(tx_buffer), 0);
 }
@@ -110,6 +111,9 @@ void send_detection(int fd, uint8_t detected, float yaw_deg, float pitch_deg, fl
 static int logger_cnt = 0;
 void feedback_callback(void *data) {
   const FeedbackPacket_t *pkt = (const FeedbackPacket_t *)data;
+
+  // printf("feedback: %f %f %f %f\n", pkt->servo_angle_trans.angle_lu, pkt->servo_angle_trans.angle_ld,
+  //        pkt->servo_angle_trans.angle_ru, pkt->servo_angle_trans.angle_rd);
 
   // 获取当前时间
   struct timespec ts;
@@ -123,7 +127,11 @@ void feedback_callback(void *data) {
 
   // 写入日志文件
   if (uart_g_state && uart_g_state->log_fp) {
-    fprintf(uart_g_state->log_fp, "[%s] Received feedback data: %f\n", time_str, pkt->data);
+    // 将所有的收到的内容写入日志文件中
+    fprintf(uart_g_state->log_fp, "[%s] F_steer_y: %.2f, F_steer_z: %.2f, T: %.2f, angle_lu: %.2f, angle_ld: %.2f, angle_ru: %.2f, angle_rd: %.2f\n",
+            time_str,
+            pkt->force_steer_trans.F_steer_y, pkt->force_steer_trans.F_steer_z, pkt->force_steer_trans.T,
+            pkt->servo_angle_trans.angle_lu, pkt->servo_angle_trans.angle_ld, pkt->servo_angle_trans.angle_ru, pkt->servo_angle_trans.angle_rd);
     logger_cnt++;
     if (logger_cnt >= 100) {
       fflush(uart_g_state->log_fp);  // 定期刷新，防止数据丢失
@@ -185,51 +193,41 @@ void *run_uart_send(void *args) {
   int fd = thread_args->fd;
   State *state = thread_args->state;
 
-  const long period_ns = 1000000L;  // 1kHz
+  uint64_t last_sent_seq = 0;
 
   while (!state_should_exit(state)) {
-    struct timespec now_ts;
-    clock_gettime(CLOCK_MONOTONIC, &now_ts);
-
-    float dt = 0.0f;
-    struct timespec kf_ts;
-    bool has_kf_ts = state_copy_track_ts(state, &kf_ts);
-    if (has_kf_ts) {
-      dt = (float)((now_ts.tv_sec - kf_ts.tv_sec) +
-                   (now_ts.tv_nsec - kf_ts.tv_nsec) / 1000000000.0);
-      if (dt < state->kf_cfg.dt_min) {
-        dt = state->kf_cfg.dt_min;
-      } else if (dt > state->kf_cfg.dt_max) {
-        dt = state->kf_cfg.dt_max;
-      }
-    } else {
-      dt = state->kf_cfg.dt_default;
+    pthread_mutex_lock(&state->track_mutex);
+    while (!state_should_exit(state) &&
+           (!state->track_ts_valid || state->track_seq == last_sent_seq)) {
+      pthread_cond_wait(&state->track_cv, &state->track_mutex);
     }
+    if (state_should_exit(state)) {
+      pthread_mutex_unlock(&state->track_mutex);
+      break;
+    }
+    last_sent_seq = state->track_seq;
+    pthread_mutex_unlock(&state->track_mutex);
 
     TrackOutput track = {0};
     state_copy_track(state, &track);
 
     if (track.has_output) {
-      float pred_yaw = track.yaw + track.v_yaw * dt;
-      float pred_pitch = track.pitch + track.v_pitch * dt;
       float distance_m = track.distance_valid ? track.distance : 0.0f;
-      send_detection(fd, true, pred_yaw, pred_pitch, track.v_yaw, track.v_pitch, distance_m);
+      send_detection(fd, true, track.yaw, track.pitch, track.v_yaw, track.v_pitch, distance_m);
     } else {
       send_detection(fd, false, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
     }
-
-    struct timespec next_ts;
-    clock_gettime(CLOCK_MONOTONIC, &next_ts);
-    next_ts.tv_nsec += period_ns;
-    while (next_ts.tv_nsec >= 1000000000L) {
-      next_ts.tv_nsec -= 1000000000L;
-      next_ts.tv_sec += 1;
-    }
-
-    int sleep_rc;
-    do {
-      sleep_rc = clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &next_ts, NULL);
-    } while (sleep_rc == EINTR && !state_should_exit(state));
+    // 打印发送频 率
+      // static struct timespec time_stamp, last_time_stamp;
+      // static double average_fps = 0.0;
+      // clock_gettime(CLOCK_MONOTONIC, &time_stamp);
+      // double time_used = (time_stamp.tv_sec - last_time_stamp.tv_sec) +
+      //                     (time_stamp.tv_nsec - last_time_stamp.tv_nsec) / 1000000000.0;
+  
+      // average_fps = (average_fps * 9 + 1.0 / time_used) / 10;
+      // printf("UART Send Time interval: %f seconds, FPS: %f, Average FPS: %f\n", time_used, 1.0 / time_used,
+      //         average_fps);
+      // last_time_stamp = time_stamp;
   }
 
   printf("Exit UART send thread\n");

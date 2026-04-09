@@ -276,10 +276,12 @@ void state_init(State *state, bool debug, bool raw) {
   state->crop_scale = 1.0f;
   pthread_mutex_init(&state->obj_mutex, NULL);
   pthread_mutex_init(&state->track_mutex, NULL);
+  pthread_cond_init(&state->track_cv, NULL);
   kalman_config_init(&state->kf_cfg);
   state->kf.initialized = false;
   memset(&state->track, 0, sizeof(state->track));
   state->track_ts_valid = false;
+  state->track_seq = 0;
 }
 
 // 释放状态结构体内部资源
@@ -288,6 +290,7 @@ void state_destroy(State *state) {
   CVI_TDL_Free(&state->last_obj);
   pthread_mutex_unlock(&state->obj_mutex);
   pthread_mutex_destroy(&state->obj_mutex);
+  pthread_cond_destroy(&state->track_cv);
   pthread_mutex_destroy(&state->track_mutex);
   if (state->record_fp) {
     fclose(state->record_fp);
@@ -305,6 +308,9 @@ void state_destroy(State *state) {
 void state_request_exit(State *state) {
   if (state) {
     state->exit_requested = true;
+    pthread_mutex_lock(&state->track_mutex);
+    pthread_cond_broadcast(&state->track_cv);
+    pthread_mutex_unlock(&state->track_mutex);
   }
 }
 
@@ -370,6 +376,8 @@ void state_update_track_ts(State *state, const struct timespec *ts) {
   pthread_mutex_lock(&state->track_mutex);
   state->track_ts = *ts;
   state->track_ts_valid = true;
+  state->track_seq++;
+  pthread_cond_signal(&state->track_cv);
   pthread_mutex_unlock(&state->track_mutex);
 }
 

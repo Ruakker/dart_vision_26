@@ -78,7 +78,7 @@ reb0:6:wait:/sbin/reboot
 新建 `/boot/uEnv.txt`，写入以下内容：
 
 ```
-console=null
+consoledev=null
 ```
 
 # 设置自启动
