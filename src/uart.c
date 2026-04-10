@@ -103,7 +103,7 @@ void send_detection(int fd, uint8_t detected, float yaw_deg, float pitch_deg, fl
   g_detection_payload.v_yaw = v_yaw_deg;
   g_detection_payload.v_pitch = v_pitch_deg;
   g_detection_payload.distance = distance_m;
-  printf("Send yaw: %.2f\n", yaw_deg);
+  // printf("Send yaw: %.2f\n", yaw_deg);
 
   Send_Cmd_Packet((void *)(intptr_t)fd, tx_buffer, sizeof(tx_buffer), 0);
 }

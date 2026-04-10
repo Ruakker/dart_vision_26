@@ -289,13 +289,19 @@ static bool measure_best_angle(const VIDEO_FRAME_INFO_S *frame, const cvtdl_obje
 
   float center_x = (obj->bbox.x1 + obj->bbox.x2) * 0.5f;
   float center_y = (obj->bbox.y1 + obj->bbox.y2) * 0.5f;
+  float bbox_h = obj->bbox.y2 - obj->bbox.y1;
+  float measure_x = center_x;
+  float measure_y = center_y - TARGET_UP_OFFSET_HEIGHT_FACTOR * bbox_h;
+
+  measure_x = clamp_float(measure_x, 0.0f, (float)(frame->stVFrame.u32Width - 1));
+  measure_y = clamp_float(measure_y, 0.0f, (float)(frame->stVFrame.u32Height - 1));
 
   // 推理图坐标 -> 原始相机坐标（裁剪 + 缩放）
-  float orig_x = center_x;
-  float orig_y = center_y;
+  float orig_x = measure_x;
+  float orig_y = measure_y;
   if (state->crop_size > 0 && state->crop_scale > 1e-6f) {
-    orig_x = center_x * state->crop_scale + (float)state->crop_x;
-    orig_y = center_y * state->crop_scale + (float)state->crop_y;
+    orig_x = measure_x * state->crop_scale + (float)state->crop_x;
+    orig_y = measure_y * state->crop_scale + (float)state->crop_y;
   }
 
   float angle_x = 0.0f;
@@ -308,7 +314,6 @@ static bool measure_best_angle(const VIDEO_FRAME_INFO_S *frame, const cvtdl_obje
   *distance_m = 0.0f;
   *distance_valid = false;
   float bbox_w = obj->bbox.x2 - obj->bbox.x1;
-  float bbox_h = obj->bbox.y2 - obj->bbox.y1;
   if (bbox_w > 0.0f && bbox_h > 0.0f) {
     float scale = 1.0f;
     if (state->crop_size > 0 && state->crop_scale > 1e-6f) {
@@ -392,18 +397,16 @@ void *run_tdl(void *args) {
   bool confirmed = false;
 
   while (!state_should_exit(state)) {
-    // if (state->debug) {
-    //  static struct timespec time_stamp, last_time_stamp;
-    //  static double average_fps = 0.0;
-    //  clock_gettime(CLOCK_MONOTONIC, &time_stamp);
-    //  double time_used = (time_stamp.tv_sec - last_time_stamp.tv_sec) +
-    //                     (time_stamp.tv_nsec - last_time_stamp.tv_nsec) / 1000000000.0;
+    // static struct timespec time_stamp, last_time_stamp;
+    // static double average_fps = 0.0;
+    // clock_gettime(CLOCK_MONOTONIC, &time_stamp);
+    // double time_used = (time_stamp.tv_sec - last_time_stamp.tv_sec) +
+    //                    (time_stamp.tv_nsec - last_time_stamp.tv_nsec) / 1000000000.0;
 
-    //  average_fps = (average_fps * 9 + 1.0 / time_used) / 10;
-    //  printf("Time interval: %f seconds, FPS: %f, Average FPS: %f\n", time_used, 1.0 / time_used,
-    //         average_fps);
-    //  last_time_stamp = time_stamp;
-    // }
+    // average_fps = (average_fps * 9 + 1.0 / time_used) / 10;
+    // printf("Time interval: %f seconds, FPS: %f, Average FPS: %f\n", time_used, 1.0 / time_used,
+    //        average_fps);
+    // last_time_stamp = time_stamp;
 
     // 从 VPSS Chn1 获取推理输入帧
     s32Ret = CVI_VPSS_GetChnFrame(0, VPSS_CHN1, &stFrame, 2000);
@@ -530,8 +533,8 @@ void *run_tdl(void *args) {
       state_update_track_ts(state, &kf_ts);
     }
 
-    // 控制台调试打印（保留详细信息，便于定位）
-    if (state->debug && stObjMeta.size != 0) {
+    // 保留详细信息，便于定位
+    if (stObjMeta.size != 0) {
       printf("Obj count: %d\n", stObjMeta.size);
       for (int i = 0; i < stObjMeta.size; i++) {
         int center_x = (int)(stObjMeta.info[i].bbox.x1 +

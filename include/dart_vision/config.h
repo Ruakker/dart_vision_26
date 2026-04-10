@@ -24,6 +24,10 @@
 #define TARGET_DIAMETER_M 0.055f
 #define TARGET_MIN_DIAMETER_PX 3.0f
 
+// 瞄点偏移：以检测框中心为基准，沿图像 y 轴向上偏移 (系数 * 框高)
+// 例如 1.5f 表示使用“中心点上方 1.5 个框高”作为更新/发送位置
+#define TARGET_UP_OFFSET_HEIGHT_FACTOR 1.5f
+
 // 配置文件路径
 #define CAMERA_INFO_PATH "/root/config/camera_info.json"
 #define APP_CONFIG_PATH "/root/config/config.json"
@@ -49,7 +53,6 @@ typedef struct {
 	float model_thresh;
 	bool record_enable;
 	char record_dir[256];
-	bool debug;
 	bool raw;
 } AppConfig;
 

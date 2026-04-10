@@ -42,9 +42,8 @@ static void handle_signal(int signo) {
 // 打印使用说明
 static void print_usage(const char *prog) {
   printf(
-  "\nUsage: %s YOLOV8_MODEL_PATH [--debug] [--raw].\n\n"
+  "\nUsage: %s YOLOV8_MODEL_PATH [--raw].\n\n"
       "\tYOLOV8_MODEL_PATH, path to yolov8n model.\n"
-  "\t--debug, enable on-screen boxes, RTSP streaming.\n"
   "\t--raw, record/stream raw frames without any overlay.\n",
       prog);
 }
@@ -52,16 +51,13 @@ static void print_usage(const char *prog) {
 // 解析命令行参数
 // 支持：
 //  1) model
-//  2) model --debug
-//  3) model --raw
-//  4) model --debug --raw (任意顺序)
+//  2) model --raw
 static bool parse_args(int argc, char **argv, AppConfig *cfg) {
   if (!cfg) {
     return false;
   }
 
   memset(cfg, 0, sizeof(*cfg));
-  cfg->debug = false;
   cfg->raw = false;
 
   if (argc < 2) {
@@ -70,9 +66,7 @@ static bool parse_args(int argc, char **argv, AppConfig *cfg) {
 
   cfg->model_path = argv[1];
   for (int i = 2; i < argc; i++) {
-    if (strcmp(argv[i], "--debug") == 0) {
-      cfg->debug = true;
-    } else if (strcmp(argv[i], "--raw") == 0) {
+    if (strcmp(argv[i], "--raw") == 0) {
       cfg->raw = true;
     } else {
       return false;
@@ -109,7 +103,7 @@ static CVI_S32 init_middleware(const AppConfig *cfg, SAMPLE_TDL_MW_CONTEXT *mw_c
     return CVI_FAILURE;
   }
 
-  // 根据 debug 模式切换编码尺寸
+  // 固定编码尺寸
   venc_size->u32Width = IMAGE_WIDTH;
   venc_size->u32Height = IMAGE_HEIGHT;
 
@@ -262,9 +256,8 @@ create_tdl_fail:
 
 // -------------------- 状态管理 --------------------
 // 初始化状态结构体与互斥锁
-void state_init(State *state, bool debug, bool raw) {
+void state_init(State *state, bool raw) {
   memset(state, 0, sizeof(*state));
-  state->debug = debug;
   state->raw = raw;
   state->uart_fd = -1;
   state->record_enable = false;
@@ -515,7 +508,7 @@ int main(int argc, char **argv) {
   signal(SIGTERM, handle_signal);
 
   State state;
-  state_init(&state, cfg.debug, cfg.raw);
+  state_init(&state, cfg.raw);
   g_state = &state;
 
   if (!load_camera_info(cfg.camera_info_path, &state.camera)) {
@@ -623,16 +616,12 @@ int main(int argc, char **argv) {
 
   pthread_create(&uart_recv_thread, NULL, run_uart_recv, &uart_args);
   pthread_create(&uart_send_thread, NULL, run_uart_send, &uart_args);
-  if (cfg.debug || cfg.record_enable) {
-    pthread_create(&venc_thread, NULL, run_venc, &venc_args);
-  }
+  pthread_create(&venc_thread, NULL, run_venc, &venc_args);
   pthread_create(&tdl_thread, NULL, run_tdl, &tdl_args);
 
   pthread_join(uart_recv_thread, NULL);
   pthread_join(uart_send_thread, NULL);
-  if (cfg.debug || cfg.record_enable) {
-    pthread_join(venc_thread, NULL);
-  }
+  pthread_join(venc_thread, NULL);
   pthread_join(tdl_thread, NULL);
 
   CVI_TDL_Service_DestroyHandle(service_handle);

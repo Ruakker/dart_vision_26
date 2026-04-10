@@ -16,7 +16,7 @@
 #include "../include/dart_vision/tdl.h"
 
 // 编码/绘制线程：从 VPSS 取帧 -> 画框 -> RTSP 推流
-// debug 或录制开启时，叠加可视化信息。
+// 非 raw 模式时，始终叠加可视化信息。
 static CVI_S32 send_frame_rtsp_record(VIDEO_FRAME_INFO_S *stVencFrame,
                                       SAMPLE_TDL_MW_CONTEXT *pstMWContext,
                                       FILE *record_fp) {
@@ -275,8 +275,7 @@ void *run_venc(void *args) {
       break;
     }
 
-    if (!thread_args->state->raw &&
-      (thread_args->state->debug || thread_args->state->record_enable)) {
+    if (!thread_args->state->raw) {
       s32Ret = draw_overlay(thread_args, &stFrame, &stObjMeta);
       if (s32Ret != CVI_SUCCESS) {
         CVI_VPSS_ReleaseChnFrame(0, 0, &stFrame);

@@ -14,7 +14,6 @@
 // 运行时共享状态（线程间通信）
 typedef struct {
   volatile bool exit_requested;      // 线程退出标记
-  bool debug;                        // 是否输出调试信息
   bool raw;                          // raw模式（不叠加绘制）
   int uart_fd;                       // UART 句柄
   CameraParams camera;               // 相机内参
@@ -38,7 +37,7 @@ typedef struct {
   FILE *log_fp;                      // 日志文件句柄
 } State;
 
-void state_init(State *state, bool debug, bool raw);
+void state_init(State *state, bool raw);
 void state_destroy(State *state);
 void state_request_exit(State *state);
 bool state_should_exit(const State *state);
