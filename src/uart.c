@@ -211,23 +211,23 @@ void *run_uart_send(void *args) {
     TrackOutput track = {0};
     state_copy_track(state, &track);
 
-    if (track.has_output) {
+    if (track.detected) {
       float distance_m = track.distance_valid ? track.distance : 0.0f;
       send_detection(fd, true, track.yaw, track.pitch, track.v_yaw, track.v_pitch, distance_m);
     } else {
       send_detection(fd, false, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
     }
-    // 打印发送频 率
-      // static struct timespec time_stamp, last_time_stamp;
-      // static double average_fps = 0.0;
-      // clock_gettime(CLOCK_MONOTONIC, &time_stamp);
-      // double time_used = (time_stamp.tv_sec - last_time_stamp.tv_sec) +
-      //                     (time_stamp.tv_nsec - last_time_stamp.tv_nsec) / 1000000000.0;
+    // 打印发送频率
+    static struct timespec time_stamp, last_time_stamp;
+    static double average_fps = 0.0;
+    clock_gettime(CLOCK_MONOTONIC, &time_stamp);
+    double time_used = (time_stamp.tv_sec - last_time_stamp.tv_sec) +
+                        (time_stamp.tv_nsec - last_time_stamp.tv_nsec) / 1000000000.0;
   
-      // average_fps = (average_fps * 9 + 1.0 / time_used) / 10;
-      // printf("UART Send Time interval: %f seconds, FPS: %f, Average FPS: %f\n", time_used, 1.0 / time_used,
-      //         average_fps);
-      // last_time_stamp = time_stamp;
+    average_fps = (average_fps * 9 + 1.0 / time_used) / 10;
+    printf("UART Send Time interval: %f seconds, FPS: %f, Average FPS: %f\n", time_used, 1.0 / time_used,
+            average_fps);
+    last_time_stamp = time_stamp;
   }
 
   printf("Exit UART send thread\n");

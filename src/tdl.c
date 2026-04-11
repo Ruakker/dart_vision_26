@@ -447,7 +447,6 @@ void *run_tdl(void *args) {
 
     unmap_frame_virtual_addr(&stFrame);
 
-    bool kf_updated = false;
     if (has_detection) {
       bool just_initialized = false;
       if (!state->kf.initialized) {
@@ -456,12 +455,10 @@ void *run_tdl(void *args) {
         lost_count = 0;
         confirmed = (state->kf_cfg.min_confirm_frames <= 1);
         just_initialized = true;
-        kf_updated = true;
       } else {
         kalman_predict(&state->kf, &state->kf_cfg, dt);
         kalman_update(&state->kf, &state->kf_cfg, meas_yaw, meas_pitch);
         lost_count = 0;
-        kf_updated = true;
       }
 
       if (!confirmed && !just_initialized) {
@@ -478,7 +475,6 @@ void *run_tdl(void *args) {
       } else {
         kalman_predict(&state->kf, &state->kf_cfg, dt);
         lost_count++;
-        kf_updated = true;
       }
     } else {
       confirm_count = 0;
@@ -495,6 +491,7 @@ void *run_tdl(void *args) {
 
     // 将滤波结果整理为输出（供绘制/UART）
     TrackOutput track_output = {0};
+    track_output.detected = has_detection;
     track_output.confirmed = confirmed;
     track_output.confirm_count = confirm_count;
     track_output.lost_count = lost_count;
@@ -527,11 +524,9 @@ void *run_tdl(void *args) {
     }
 
     state_update_track(state, &track_output);
-    if (kf_updated) {
-      struct timespec kf_ts;
-      clock_gettime(CLOCK_MONOTONIC, &kf_ts);
-      state_update_track_ts(state, &kf_ts);
-    }
+    struct timespec kf_ts;
+    clock_gettime(CLOCK_MONOTONIC, &kf_ts);
+    state_update_track_ts(state, &kf_ts);
 
     // 保留详细信息，便于定位
     if (stObjMeta.size != 0) {

@@ -35,6 +35,7 @@ typedef struct {
 } Kalman;
 
 typedef struct {
+  bool detected;
   bool has_output;
   bool distance_valid;
   bool confirmed;
