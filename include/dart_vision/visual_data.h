@@ -23,24 +23,12 @@ typedef struct {
 #define CMD_ID_FEEDBACK 0x02
 
 #pragma pack(push, 1)
-typedef struct
-{
-    float F_steer_y; // 舵机提供的向右的推力
-    float F_steer_z; // 舵机提供的垂直向下的推力
-    float T;         // 风扇推力
-
-} Force_Control_t;
-typedef struct 
-{
-    float angle_lu; // 左上舵机角度
-    float angle_ld; // 左下舵机角度
-    float angle_ru; // 右上舵机角度
-    float angle_rd; // 右下舵机角度
-} Servo_Angle_t;
-typedef struct 
-{
-    Force_Control_t force_steer_trans;  //三个欧拉角的受力
-    Servo_Angle_t servo_angle_trans;    //四个舵机的角度
+typedef struct {
+    float u;
+    float v;
+    float w;
+    float Pitch;
+    float Yaw;
 } FeedbackPacket_t;
 #pragma pack(pop)
 

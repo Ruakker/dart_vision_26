@@ -128,10 +128,9 @@ void feedback_callback(void *data) {
   // 写入日志文件
   if (uart_g_state && uart_g_state->log_fp) {
     // 将所有的收到的内容写入日志文件中
-    fprintf(uart_g_state->log_fp, "[%s] F_steer_y: %.2f, F_steer_z: %.2f, T: %.2f, angle_lu: %.2f, angle_ld: %.2f, angle_ru: %.2f, angle_rd: %.2f\n",
+    fprintf(uart_g_state->log_fp, "[%s] u: %.2f, v: %.2f, w: %.2f, Pitch: %.2f, Yaw: %.2f\n",
             time_str,
-            pkt->force_steer_trans.F_steer_y, pkt->force_steer_trans.F_steer_z, pkt->force_steer_trans.T,
-            pkt->servo_angle_trans.angle_lu, pkt->servo_angle_trans.angle_ld, pkt->servo_angle_trans.angle_ru, pkt->servo_angle_trans.angle_rd);
+            pkt->u, pkt->v, pkt->w, pkt->Pitch, pkt->Yaw);
     logger_cnt++;
     if (logger_cnt >= 100) {
       fflush(uart_g_state->log_fp);  // 定期刷新，防止数据丢失
