@@ -17,6 +17,8 @@ typedef struct {
   bool raw;                          // raw模式（不叠加绘制）
   int uart_fd;                       // UART 句柄
   CameraParams camera;               // 相机内参
+  float optical_axis_yaw_comp_deg;   // 光轴yaw补偿（度）
+  float optical_axis_pitch_comp_deg; // 光轴pitch补偿（度）
   // 推理裁剪信息（用于把推理坐标映射回原始相机坐标系）
   CVI_S32 crop_x;
   CVI_S32 crop_y;

@@ -50,6 +50,8 @@ typedef struct {
 	const char *camera_info_path;
 	int manual_exposure_time_us;
 	int ae_target_luma;
+	float optical_axis_yaw_comp_deg;
+	float optical_axis_pitch_comp_deg;
 	float model_thresh;
 	bool record_enable;
 	char record_dir[256];

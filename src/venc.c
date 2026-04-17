@@ -15,6 +15,25 @@
 #include "../include/dart_vision/state.h"
 #include "../include/dart_vision/tdl.h"
 
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
+static void optical_axis_comp_to_pixel(const State *state, float *px, float *py) {
+  if (!state || !px || !py) {
+    return;
+  }
+  if (state->camera.fx <= 0.0f || state->camera.fy <= 0.0f) {
+    *px = state->camera.cx;
+    *py = state->camera.cy;
+    return;
+  }
+  float yaw_rad = state->optical_axis_yaw_comp_deg * (float)M_PI / 180.0f;
+  float pitch_rad = state->optical_axis_pitch_comp_deg * (float)M_PI / 180.0f;
+  *px = tanf(yaw_rad) * state->camera.fx + state->camera.cx;
+  *py = tanf(pitch_rad) * state->camera.fy + state->camera.cy;
+}
+
 // 编码/绘制线程：从 VPSS 取帧 -> 画框 -> RTSP 推流
 // 非 raw 模式时，始终叠加可视化信息。
 static CVI_S32 send_frame_rtsp_record(VIDEO_FRAME_INFO_S *stVencFrame,
@@ -132,16 +151,17 @@ static CVI_S32 draw_overlay(VencThreadArgs *thread_args, VIDEO_FRAME_INFO_S *stF
   // 将相机坐标系像素映射到当前输出帧坐标系（320x320）
   float disp_px = track.px;
   float disp_py = track.py;
-  float disp_cx = thread_args->state->camera.cx;
-  float disp_cy = thread_args->state->camera.cy;
+  float disp_cx = 0.0f;
+  float disp_cy = 0.0f;
+  optical_axis_comp_to_pixel(thread_args->state, &disp_cx, &disp_cy);
   float disp_vx = track.v_px;
   float disp_vy = track.v_py;
   if (thread_args->state->crop_size > 0 && thread_args->state->crop_scale > 1e-6f) {
     float inv_scale = 1.0f / thread_args->state->crop_scale;
     disp_px = (track.px - (float)thread_args->state->crop_x) * inv_scale;
     disp_py = (track.py - (float)thread_args->state->crop_y) * inv_scale;
-    disp_cx = (thread_args->state->camera.cx - (float)thread_args->state->crop_x) * inv_scale;
-    disp_cy = (thread_args->state->camera.cy - (float)thread_args->state->crop_y) * inv_scale;
+    disp_cx = (disp_cx - (float)thread_args->state->crop_x) * inv_scale;
+    disp_cy = (disp_cy - (float)thread_args->state->crop_y) * inv_scale;
     disp_vx = track.v_px * inv_scale;
     disp_vy = track.v_py * inv_scale;
   }
@@ -166,7 +186,6 @@ static CVI_S32 draw_overlay(VencThreadArgs *thread_args, VIDEO_FRAME_INFO_S *stF
   line_pts.y = y_line;
   line_pts.size = 2;
   CVI_TDL_Service_DrawPolygon(thread_args->service_handle, stFrame, &line_pts, red_brush);
-
   // 目标中心十字
   float cross = 4.0f;
   float x_h[2] = {disp_px - cross, disp_px + cross};

@@ -26,6 +26,14 @@ static float clamp_float(float v, float lo, float hi) {
   return v;
 }
 
+static inline float compensated_to_raw_yaw(const State *state, float yaw_deg) {
+  return yaw_deg + (state ? state->optical_axis_yaw_comp_deg : 0.0f);
+}
+
+static inline float compensated_to_raw_pitch(const State *state, float pitch_deg) {
+  return pitch_deg + (state ? state->optical_axis_pitch_comp_deg : 0.0f);
+}
+
 // 角度(度) -> 像素坐标
 static void angle_to_pixel(const CameraParams *camera, float yaw_deg, float pitch_deg, float *px,
                            float *py) {
@@ -55,10 +63,12 @@ static bool predict_pixel_from_kf(const State *state, float dt, float *px, float
 
   float pred_yaw = state->kf.x[0] + dt * state->kf.x[1];
   float pred_pitch = state->kf.x[2] + dt * state->kf.x[3];
+  float raw_pred_yaw = compensated_to_raw_yaw(state, pred_yaw);
+  float raw_pred_pitch = compensated_to_raw_pitch(state, pred_pitch);
 
   float orig_x = 0.0f;
   float orig_y = 0.0f;
-  angle_to_pixel(&state->camera, pred_yaw, pred_pitch, &orig_x, &orig_y);
+  angle_to_pixel(&state->camera, raw_pred_yaw, raw_pred_pitch, &orig_x, &orig_y);
 
   if (state->crop_size > 0 && state->crop_scale > 1e-6f) {
     *px = (orig_x - (float)state->crop_x) / state->crop_scale;
@@ -332,8 +342,8 @@ static bool measure_best_angle(const VIDEO_FRAME_INFO_S *frame, const cvtdl_obje
     }
   }
 
-  *yaw_deg = angle_x * 180.0f / (float)M_PI;
-  *pitch_deg = angle_y * 180.0f / (float)M_PI;
+  *yaw_deg = angle_x * 180.0f / (float)M_PI - state->optical_axis_yaw_comp_deg;
+  *pitch_deg = angle_y * 180.0f / (float)M_PI - state->optical_axis_pitch_comp_deg;
   return true;
 }
 
@@ -501,9 +511,12 @@ void *run_tdl(void *args) {
       track_output.pitch = state->kf.x[2];
       track_output.v_pitch = state->kf.x[3];
 
-      angle_to_pixel(&state->camera, track_output.yaw, track_output.pitch, &track_output.px,
+      float raw_yaw = compensated_to_raw_yaw(state, track_output.yaw);
+      float raw_pitch = compensated_to_raw_pitch(state, track_output.pitch);
+
+      angle_to_pixel(&state->camera, raw_yaw, raw_pitch, &track_output.px,
                      &track_output.py);
-      angle_velocity_to_pixel_velocity(&state->camera, track_output.yaw, track_output.pitch,
+      angle_velocity_to_pixel_velocity(&state->camera, raw_yaw, raw_pitch,
                                        track_output.v_yaw, track_output.v_pitch, &track_output.v_px,
                                        &track_output.v_py);
 
@@ -544,8 +557,8 @@ void *run_tdl(void *args) {
           angle_x = atan((center_x - state->camera.cx) / state->camera.fx);
           angle_y = atan((center_y - state->camera.cy) / state->camera.fy);
         }
-        float angle_x_deg = angle_x * 180.0f / (float)M_PI;
-        float angle_y_deg = angle_y * 180.0f / (float)M_PI;
+        float angle_x_deg = angle_x * 180.0f / (float)M_PI - state->optical_axis_yaw_comp_deg;
+        float angle_y_deg = angle_y * 180.0f / (float)M_PI - state->optical_axis_pitch_comp_deg;
 
         // printf("  Obj[%d]: Score: %f, BBox: [%f, %f, %f, %f], Angle(deg): [%.2f, %.2f]\n", i,
         //        stObjMeta.info[i].bbox.score, stObjMeta.info[i].bbox.x1, stObjMeta.info[i].bbox.y1,

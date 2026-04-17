@@ -263,6 +263,8 @@ void state_init(State *state, bool raw) {
   state->record_enable = false;
   state->record_fp = NULL;
   state->log_fp = NULL;
+  state->optical_axis_yaw_comp_deg = 0.0f;
+  state->optical_axis_pitch_comp_deg = 0.0f;
   state->crop_x = 0;
   state->crop_y = 0;
   state->crop_size = 0;
@@ -523,6 +525,10 @@ int main(int argc, char **argv) {
     printf("Warning: Failed to load app config (%s), using defaults.\n", APP_CONFIG_PATH);
   }
   config_sanitize(&cfg);
+  state.optical_axis_yaw_comp_deg = cfg.optical_axis_yaw_comp_deg;
+  state.optical_axis_pitch_comp_deg = cfg.optical_axis_pitch_comp_deg;
+  printf("Optical axis compensation loaded: yaw=%.3f deg, pitch=%.3f deg\n",
+         state.optical_axis_yaw_comp_deg, state.optical_axis_pitch_comp_deg);
 
   // 卡尔曼配置
   if (!load_kalman_config(APP_CONFIG_PATH, &state.kf_cfg)) {

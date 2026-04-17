@@ -6,6 +6,10 @@
   "model": {
     "threshold": 0.1
   },
+  "optical_axis_compensation": {
+    "yaw_deg": 0.0,
+    "pitch_deg": 0.0
+  },
   "record": {
     "enable": false,
     "path": "/root/record"

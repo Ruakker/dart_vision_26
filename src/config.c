@@ -49,6 +49,13 @@ static void json_read_int(cJSON *obj, const char *key, int *out) {
   }
 }
 
+static void json_read_float(cJSON *obj, const char *key, float *out) {
+  cJSON *item = cJSON_GetObjectItem(obj, key);
+  if (cJSON_IsNumber(item) && out) {
+    *out = (float)item->valuedouble;
+  }
+}
+
 static void json_read_bool(cJSON *obj, const char *key, bool *out) {
   cJSON *item = cJSON_GetObjectItem(obj, key);
   if (out) {
@@ -73,6 +80,8 @@ void config_set_defaults(AppConfig *cfg) {
   }
   cfg->manual_exposure_time_us = 500;
   cfg->ae_target_luma = 30;
+  cfg->optical_axis_yaw_comp_deg = 0.0f;
+  cfg->optical_axis_pitch_comp_deg = 0.0f;
   cfg->model_thresh = MODEL_THRESH_DEFAULT;
   cfg->record_enable = false;
   snprintf(cfg->record_dir, sizeof(cfg->record_dir), "%s", "/root");
@@ -117,6 +126,12 @@ bool load_app_config(const char *path, AppConfig *cfg) {
     if (cJSON_IsNumber(threshold)) {
       cfg->model_thresh = (float)threshold->valuedouble;
     }
+  }
+
+  cJSON *optical_axis = cJSON_GetObjectItem(root, "optical_axis_compensation");
+  if (cJSON_IsObject(optical_axis)) {
+    json_read_float(optical_axis, "yaw_deg", &cfg->optical_axis_yaw_comp_deg);
+    json_read_float(optical_axis, "pitch_deg", &cfg->optical_axis_pitch_comp_deg);
   }
 
   cJSON *record = cJSON_GetObjectItem(root, "record");
