@@ -34,35 +34,36 @@ int uart_init(const char *device, int baud_rate) {
 
   speed_t baud;
   switch (baud_rate) {
-    case 4800:
-      baud = B4800;
-      break;
-    case 9600:
-      baud = B9600;
-      break;
-    case 19200:
-      baud = B19200;
-      break;
-    case 38400:
-      baud = B38400;
-      break;
-    case 57600:
-      baud = B57600;
-      break;
-    case 115200:
-      baud = B115200;
-      break;
-    case 230400:
-      baud = B230400;
-      break;
-    case 460800:
-      baud = B460800;
-      break;
+  case 4800:
+    baud = B4800;
+    break;
+  case 9600:
+    baud = B9600;
+    break;
+  case 19200:
+    baud = B19200;
+    break;
+  case 38400:
+    baud = B38400;
+    break;
+  case 57600:
+    baud = B57600;
+    break;
+  case 115200:
+    baud = B115200;
+    break;
+  case 230400:
+    baud = B230400;
+    break;
+  case 460800:
+    baud = B460800;
+    break;
 
-    default:
-      printf("Warning: Baud rate %d not supported, defaulting to 115200\n", baud_rate);
-      baud = B115200;
-      break;
+  default:
+    printf("Warning: Baud rate %d not supported, defaulting to 115200\n",
+           baud_rate);
+    baud = B115200;
+    break;
   }
   cfsetispeed(&options, baud);
   cfsetospeed(&options, baud);
@@ -91,8 +92,8 @@ int uart_init(const char *device, int baud_rate) {
   return fd;
 }
 
-void send_detection(int fd, uint8_t detected, float yaw_deg, float pitch_deg, float v_yaw_deg,
-                    float v_pitch_deg, float distance_m) {
+void send_detection(int fd, uint8_t detected, float yaw_deg, float pitch_deg,
+                    float v_yaw_deg, float v_pitch_deg, float distance_m) {
   if (fd < 0) {
     return;
   }
@@ -103,7 +104,12 @@ void send_detection(int fd, uint8_t detected, float yaw_deg, float pitch_deg, fl
   g_detection_payload.v_yaw = v_yaw_deg;
   g_detection_payload.v_pitch = v_pitch_deg;
   g_detection_payload.distance = distance_m;
-  // printf("Send yaw: %.2f\n", yaw_deg);
+
+  // 打印发送的数据
+  printf("Sending detection: detected=%d, yaw=%.2f, pitch=%.2f, v_yaw=%.2f, v_pitch=%.2f, distance=%.3f\n",
+         g_detection_payload.detected, g_detection_payload.yaw,
+         g_detection_payload.pitch, g_detection_payload.v_yaw,
+         g_detection_payload.v_pitch, g_detection_payload.distance);
 
   Send_Cmd_Packet((void *)(intptr_t)fd, tx_buffer, sizeof(tx_buffer), 0);
 }
@@ -112,8 +118,11 @@ static int logger_cnt = 0;
 void feedback_callback(void *data) {
   const FeedbackPacket_t *pkt = (const FeedbackPacket_t *)data;
 
-  // printf("feedback: %f %f %f %f\n", pkt->servo_angle_trans.angle_lu, pkt->servo_angle_trans.angle_ld,
+  // printf("feedback: %f %f %f %f\n", pkt->servo_angle_trans.angle_lu,
+  // pkt->servo_angle_trans.angle_ld,
   //        pkt->servo_angle_trans.angle_ru, pkt->servo_angle_trans.angle_rd);
+  // printf("feedback: detected=%d, err_pitch=%.2f, err_yaw=%.2f\n", pkt->detected,
+  //        pkt->err_pitch, pkt->err_yaw);
 
   // 获取当前时间
   struct timespec ts;
@@ -122,23 +131,36 @@ void feedback_callback(void *data) {
   localtime_r(&ts.tv_sec, &tm_info);
 
   char time_str[20];
-  snprintf(time_str, sizeof(time_str), "%02d:%02d.%03ld", tm_info.tm_min, tm_info.tm_sec,
-           ts.tv_nsec / 1000000);
+  snprintf(time_str, sizeof(time_str), "%02d:%02d.%03ld", tm_info.tm_min,
+           tm_info.tm_sec, ts.tv_nsec / 1000000);
 
   // 写入日志文件
   if (uart_g_state && uart_g_state->log_fp) {
     // 将所有的收到的内容写入日志文件中
-    fprintf(uart_g_state->log_fp, "[%s] u: %.2f, v: %.2f, w: %.2f, Pitch: %.2f, Yaw: %.2f\n",
-            time_str,
-            pkt->u, pkt->v, pkt->w, pkt->Pitch, pkt->Yaw);
+    // fprintf(uart_g_state->log_fp, "[%s] u: %.2f, v: %.2f, w: %.2f, Pitch:
+    // %.2f, Yaw: %.2f\n",
+    //         time_str,
+    //         pkt->u, pkt->v, pkt->w, pkt->Pitch, pkt->Yaw);
+    fprintf(uart_g_state->log_fp,
+            "[%s] detected: %d, err_pitch: %.2f, err_yaw: %.2f\n", time_str,
+            pkt->detected, pkt->err_pitch, pkt->err_yaw);
     logger_cnt++;
     if (logger_cnt >= 100) {
-      fflush(uart_g_state->log_fp);  // 定期刷新，防止数据丢失
+      fflush(uart_g_state->log_fp); // 定期刷新，防止数据丢失
       logger_cnt = 0;
     }
   }
 
-  // printf("Received feedback data: %f\n", pkt->data);
+  // 打印接收频率
+  // static struct timespec last_time_stamp;
+  // static double average_fps = 0.0;
+  // clock_gettime(CLOCK_MONOTONIC, &ts);
+  // double time_used = (ts.tv_sec - last_time_stamp.tv_sec) +
+  //                    (ts.tv_nsec - last_time_stamp.tv_nsec) / 1000000000.0;
+  // average_fps = (average_fps * 9 + 1.0 / time_used) / 10;
+  // printf("UART Receive Time interval: %f seconds, FPS: %f, Average FPS: %f\n",
+  //        time_used, 1.0 / time_used, average_fps);
+  // last_time_stamp = ts;
 }
 
 void *run_uart_recv(void *args) {
@@ -157,7 +179,8 @@ void *run_uart_recv(void *args) {
       memcpy(rx_buffer + rx_buffer_len, rx, (size_t)n);
       rx_buffer_len += (unsigned int)n;
 
-      int consumed = Receive_Handle_Consumed(rx_buffer, (unsigned short)rx_buffer_len);
+      int consumed =
+          Receive_Handle_Consumed(rx_buffer, (unsigned short)rx_buffer_len);
       if (consumed > 0) {
         if (consumed < rx_buffer_len) {
           // 还没处理完的数据（半包），移到最前面
@@ -169,7 +192,7 @@ void *run_uart_recv(void *args) {
         }
       }
     } else if (n < 0) {
-      if (errno == EINTR) {  // ctrl+c
+      if (errno == EINTR) { // ctrl+c
         continue;
       }
 
@@ -212,21 +235,24 @@ void *run_uart_send(void *args) {
 
     if (track.detected) {
       float distance_m = track.distance_valid ? track.distance : 0.0f;
-      send_detection(fd, true, track.yaw, track.pitch, track.v_yaw, track.v_pitch, distance_m);
+      send_detection(fd, true, track.yaw, track.pitch, track.v_yaw,
+                     track.v_pitch, distance_m);
     } else {
       send_detection(fd, false, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
     }
     // 打印发送频率
-    // static struct timespec time_stamp, last_time_stamp;
-    // static double average_fps = 0.0;
-    // clock_gettime(CLOCK_MONOTONIC, &time_stamp);
-    // double time_used = (time_stamp.tv_sec - last_time_stamp.tv_sec) +
-    //                     (time_stamp.tv_nsec - last_time_stamp.tv_nsec) / 1000000000.0;
-  
-    // average_fps = (average_fps * 9 + 1.0 / time_used) / 10;
-    // printf("UART Send Time interval: %f seconds, FPS: %f, Average FPS: %f\n", time_used, 1.0 / time_used,
-    //         average_fps);
-    // last_time_stamp = time_stamp;
+    static struct timespec time_stamp, last_time_stamp;
+    static double average_fps = 0.0;
+    clock_gettime(CLOCK_MONOTONIC, &time_stamp);
+    double time_used = (time_stamp.tv_sec - last_time_stamp.tv_sec) +
+                        (time_stamp.tv_nsec - last_time_stamp.tv_nsec) /
+                        1000000000.0;
+
+    average_fps = (average_fps * 9 + 1.0 / time_used) / 10;
+    printf("UART Send Time interval: %f seconds, FPS: %f, Average FPS: %f\n",
+    time_used, 1.0 / time_used,
+            average_fps);
+    last_time_stamp = time_stamp;
   }
 
   printf("Exit UART send thread\n");

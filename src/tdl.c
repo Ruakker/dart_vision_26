@@ -223,11 +223,11 @@ bool select_best_object(const VIDEO_FRAME_INFO_S *frame, const cvtdl_object_t *m
     }
     float ratio = w > h ? (w / h) : (h / w);
     if (ratio > aspect_ratio_thresh) {
-      printf("Object %d filtered out by aspect ratio: %f\n", i, ratio);
+      // printf("Object %d filtered out by aspect ratio: %f\n", i, ratio);
       continue;
     }
     if (!check_object_is_green(frame, &meta->info[i].bbox)) {
-      printf("Object %d filtered out as non-green\n", i);
+      // printf("Object %d filtered out as non-green\n", i);
       continue;
     }
     float score = meta->info[i].bbox.score;
@@ -253,7 +253,7 @@ bool select_best_object(const VIDEO_FRAME_INFO_S *frame, const cvtdl_object_t *m
 
   if (best) {
     *best = &meta->info[best_idx];
-    printf("Selected best object %d with score %f\n", best_idx, best_score);
+    // printf("Selected best object %d with score %f\n", best_idx, best_score);
   }
   return true;
 }
@@ -491,7 +491,6 @@ void *run_tdl(void *args) {
 
     // 将滤波结果整理为输出（供绘制/UART）
     TrackOutput track_output = {0};
-    track_output.detected = has_detection;
     track_output.confirmed = confirmed;
     track_output.confirm_count = confirm_count;
     track_output.lost_count = lost_count;
@@ -514,6 +513,9 @@ void *run_tdl(void *args) {
         }
       }
 
+      // 丢帧容忍窗口内也视为“可追踪到目标”，UART 持续发送预测后的姿态。
+      track_output.detected = track_output.has_output;
+
       if (has_detection && meas_distance_valid) {
         track_output.distance = meas_distance_m;
         track_output.distance_valid = true;
@@ -530,7 +532,7 @@ void *run_tdl(void *args) {
 
     // 保留详细信息，便于定位
     if (stObjMeta.size != 0) {
-      printf("Obj count: %d\n", stObjMeta.size);
+      // printf("Obj count: %d\n", stObjMeta.size);
       for (int i = 0; i < stObjMeta.size; i++) {
         int center_x = (int)(stObjMeta.info[i].bbox.x1 +
                              (stObjMeta.info[i].bbox.x2 - stObjMeta.info[i].bbox.x1) / 2);
@@ -545,9 +547,9 @@ void *run_tdl(void *args) {
         float angle_x_deg = angle_x * 180.0f / (float)M_PI;
         float angle_y_deg = angle_y * 180.0f / (float)M_PI;
 
-        printf("  Obj[%d]: Score: %f, BBox: [%f, %f, %f, %f], Angle(deg): [%.2f, %.2f]\n", i,
-               stObjMeta.info[i].bbox.score, stObjMeta.info[i].bbox.x1, stObjMeta.info[i].bbox.y1,
-               stObjMeta.info[i].bbox.x2, stObjMeta.info[i].bbox.y2, angle_x_deg, angle_y_deg);
+        // printf("  Obj[%d]: Score: %f, BBox: [%f, %f, %f, %f], Angle(deg): [%.2f, %.2f]\n", i,
+        //        stObjMeta.info[i].bbox.score, stObjMeta.info[i].bbox.x1, stObjMeta.info[i].bbox.y1,
+        //        stObjMeta.info[i].bbox.x2, stObjMeta.info[i].bbox.y2, angle_x_deg, angle_y_deg);
       }
     }
 

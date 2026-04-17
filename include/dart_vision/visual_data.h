@@ -23,13 +23,20 @@ typedef struct {
 #define CMD_ID_FEEDBACK 0x02
 
 #pragma pack(push, 1)
-typedef struct {
-    float u;
-    float v;
-    float w;
-    float Pitch;
-    float Yaw;
+// typedef struct {
+//     float u;
+//     float v;
+//     float w;
+//     float Pitch;
+//     float Yaw;
+// } FeedbackPacket_t;
+typedef struct{
+    uint8_t detected;
+    float err_pitch;
+    float err_yaw;
 } FeedbackPacket_t;
 #pragma pack(pop)
+
+
 
 #endif
