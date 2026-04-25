@@ -9,7 +9,7 @@ import json
 from datetime import datetime
 
 # ================= 配置区域 =================
-BOARD_IP = '10.176.81.1' 
+BOARD_IP = '10.199.55.1' 
 BOARD_PORT = 8899
 CHESSBOARD_SIZE = (6, 9)    # 棋盘格内角点数量 (行, 列)
 SQUARE_SIZE_MM = 29.2       # 每个格子的边长 (mm)

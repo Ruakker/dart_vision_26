@@ -1,1 +1,1 @@
-console=null
+consoledev=null
