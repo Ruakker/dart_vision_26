@@ -106,10 +106,10 @@ void send_detection(int fd, uint8_t detected, float yaw_deg, float pitch_deg,
   g_detection_payload.distance = distance_m;
 
   // 打印发送的数据
-  printf("Sending detection: detected=%d, yaw=%.2f, pitch=%.2f, v_yaw=%.2f, v_pitch=%.2f, distance=%.3f\n",
-         g_detection_payload.detected, g_detection_payload.yaw,
-         g_detection_payload.pitch, g_detection_payload.v_yaw,
-         g_detection_payload.v_pitch, g_detection_payload.distance);
+  // printf("Sending detection: detected=%d, yaw=%.2f, pitch=%.2f, v_yaw=%.2f, v_pitch=%.2f, distance=%.3f\n",
+  //        g_detection_payload.detected, g_detection_payload.yaw,
+  //        g_detection_payload.pitch, g_detection_payload.v_yaw,
+  //        g_detection_payload.v_pitch, g_detection_payload.distance);
 
   Send_Cmd_Packet((void *)(intptr_t)fd, tx_buffer, sizeof(tx_buffer), 0);
 }
@@ -142,10 +142,12 @@ void feedback_callback(void *data) {
     //         time_str,
     //         pkt->u, pkt->v, pkt->w, pkt->Pitch, pkt->Yaw);
     fprintf(uart_g_state->log_fp,
-            "[%s] detected: %d, err_pitch: %.2f, err_yaw: %.2f\n", time_str,
-            pkt->detected, pkt->err_pitch, pkt->err_yaw);
+            "[%s] time: %.2f, acc: %.2f\n", time_str,
+            pkt->time, pkt->acc);
+    // printf("[%s] time: %.2f, acc: %.2f\n", time_str,
+    //         pkt->time, pkt->acc);
     logger_cnt++;
-    if (logger_cnt >= 100) {
+    if (logger_cnt >= 30) {
       fflush(uart_g_state->log_fp); // 定期刷新，防止数据丢失
       logger_cnt = 0;
     }

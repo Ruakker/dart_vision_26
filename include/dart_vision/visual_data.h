@@ -31,9 +31,11 @@ typedef struct {
 //     float Yaw;
 // } FeedbackPacket_t;
 typedef struct{
-    uint8_t detected;
-    float err_pitch;
-    float err_yaw;
+    // uint8_t detected;
+    // float err_pitch;
+    // float err_yaw;
+    float time;
+    float acc;
 } FeedbackPacket_t;
 #pragma pack(pop)
 
