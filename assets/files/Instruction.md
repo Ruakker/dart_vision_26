@@ -88,7 +88,7 @@ consoledev=null
 ```bash
 #!/bin/sh
 cd /root
-MAIX_SENSOR_FPS=80 ./dart_vision model/ydd_home2_320_320_cv181x_int8_sym.cvimodel </dev/null >/dev/null 2>&1 &
+MAIX_SENSOR_FPS=80 ./dart_vision model/ydd_home3_320_320_cv181x_int8_sym.cvimodel </dev/null >/dev/null 2>&1 &
 ```
 
 赋予可执行权限：

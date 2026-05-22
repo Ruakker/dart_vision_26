@@ -36,6 +36,8 @@ typedef struct{
     // float err_yaw;
     float time;
     float acc;
+    float pitch_err;
+    float d_pitch_err;
 } FeedbackPacket_t;
 #pragma pack(pop)
 

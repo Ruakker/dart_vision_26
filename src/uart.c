@@ -142,8 +142,8 @@ void feedback_callback(void *data) {
     //         time_str,
     //         pkt->u, pkt->v, pkt->w, pkt->Pitch, pkt->Yaw);
     fprintf(uart_g_state->log_fp,
-            "[%s] time: %.2f, acc: %.2f\n", time_str,
-            pkt->time, pkt->acc);
+            "[%s] time: %.2f, acc: %.2f, pitch_err: %.2f, d_pitch_err: %.2f\n", time_str,
+            pkt->time, pkt->acc, pkt->pitch_err, pkt->d_pitch_err);
     // printf("[%s] time: %.2f, acc: %.2f\n", time_str,
     //         pkt->time, pkt->acc);
     logger_cnt++;
