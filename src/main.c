@@ -111,7 +111,7 @@ static CVI_S32 init_middleware(const AppConfig *cfg, SAMPLE_TDL_MW_CONTEXT *mw_c
 
   // VBPool 0: VPSS Grp0 Chn0 (编码/显示)
   stMWConfig.stVBPoolConfig.astVBPoolSetup[0].enFormat = VI_PIXEL_FORMAT;
-  stMWConfig.stVBPoolConfig.astVBPoolSetup[0].u32BlkCount = 5;
+  stMWConfig.stVBPoolConfig.astVBPoolSetup[0].u32BlkCount = 8;
   stMWConfig.stVBPoolConfig.astVBPoolSetup[0].u32Height = venc_size->u32Height;
   stMWConfig.stVBPoolConfig.astVBPoolSetup[0].u32Width = venc_size->u32Width;
   stMWConfig.stVBPoolConfig.astVBPoolSetup[0].bBind = true;
@@ -120,7 +120,7 @@ static CVI_S32 init_middleware(const AppConfig *cfg, SAMPLE_TDL_MW_CONTEXT *mw_c
 
   // VBPool 1: VPSS Grp0 Chn1 (推理输入)
   stMWConfig.stVBPoolConfig.astVBPoolSetup[1].enFormat = VI_PIXEL_FORMAT;
-  stMWConfig.stVBPoolConfig.astVBPoolSetup[1].u32BlkCount = 5;
+  stMWConfig.stVBPoolConfig.astVBPoolSetup[1].u32BlkCount = 8;
   stMWConfig.stVBPoolConfig.astVBPoolSetup[1].u32Height = venc_size->u32Height;
   stMWConfig.stVBPoolConfig.astVBPoolSetup[1].u32Width = venc_size->u32Width;
   stMWConfig.stVBPoolConfig.astVBPoolSetup[1].bBind = true;
@@ -169,18 +169,14 @@ static CVI_S32 init_middleware(const AppConfig *cfg, SAMPLE_TDL_MW_CONTEXT *mw_c
     return CVI_FAILURE;
   }
 
-  // VPSS Chn1 中心裁剪 480x480，再缩放到推理输入尺寸 (320x320)
-  CVI_U32 crop_size = CROP_SIZE;
-  if (crop_size > stSensorSize.u32Width || crop_size > stSensorSize.u32Height) {
-    crop_size = (stSensorSize.u32Width < stSensorSize.u32Height) ? stSensorSize.u32Width
-                                                                 : stSensorSize.u32Height;
-  }
-  // 对齐到偶数，避免硬件对齐问题
-  crop_size &= ~1U;
-  CVI_S32 crop_x = (CVI_S32)((stSensorSize.u32Width - crop_size) / 2);
-  CVI_S32 crop_y = (CVI_S32)((stSensorSize.u32Height - crop_size) / 2);
+  // VPSS 裁剪：取右侧正方形区域，再缩放到推理输入尺寸
+  CVI_U32 crop_size = (stSensorSize.u32Width < stSensorSize.u32Height)
+                          ? stSensorSize.u32Width
+                          : stSensorSize.u32Height;
+  crop_size &= ~1U; // 对齐到偶数
+  CVI_S32 crop_x = (CVI_S32)(stSensorSize.u32Width - crop_size); // 靠右
+  CVI_S32 crop_y = 0; // 垂直方向不裁剪
   crop_x &= ~1;
-  crop_y &= ~1;
 
   if (out_crop_x) {
     *out_crop_x = crop_x;
@@ -443,7 +439,12 @@ CVI_S32 set_manual_exposure(VI_PIPE ViPipe, CVI_U32 exposure_time_us) {
   stExpAttr.stAuto.stExpTimeRange.u32Max = exposure_time_us;
   stExpAttr.stAuto.stExpTimeRange.u32Min = exposure_time_us;
 
-  // 3. 锁死增益范围 [1x, 1x]
+  // 3. 使用 ISO 模式，锁定最低 ISO
+  stExpAttr.stAuto.enGainType = AE_TYPE_ISO;
+  stExpAttr.stAuto.stISONumRange.u32Max = 100;
+  stExpAttr.stAuto.stISONumRange.u32Min = 100;
+
+  // 4. 同时锁死增益范围 [1x, 1x]，防止 ISP 自动提升
   stExpAttr.stAuto.stSysGainRange.u32Max = 1024;
   stExpAttr.stAuto.stSysGainRange.u32Min = 1024;
 
@@ -454,7 +455,7 @@ CVI_S32 set_manual_exposure(VI_PIPE ViPipe, CVI_U32 exposure_time_us) {
     return s32Ret;
   }
 
-  printf("Exposure locked (Auto-Constrained): Exp=%u us, Gain=1x (No Stripes)\n", exposure_time_us);
+  printf("Exposure locked (Auto-Constrained): Exp=%u us, ISO=100 (min)\n", exposure_time_us);
   return CVI_SUCCESS;
 }
 

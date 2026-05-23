@@ -45,8 +45,9 @@ static void angle_to_pixel(const CameraParams *camera, float yaw_deg, float pitc
 
   float yaw_rad = yaw_deg * (float)M_PI / 180.0f;
   float pitch_rad = pitch_deg * (float)M_PI / 180.0f;
-  *px = tanf(yaw_rad) * camera->fx + camera->cx;
-  *py = tanf(pitch_rad) * camera->fy + camera->cy;
+  // 相机旋转 90° + 右上为正：yaw→垂直(y, 上正), pitch→水平(x, 右正)
+  *px = tanf(pitch_rad) * camera->fx + camera->cx;
+  *py = -tanf(yaw_rad) * camera->fy + camera->cy;
 }
 
 // 从卡尔曼状态预测当前像素位置（返回推理图坐标）
@@ -96,10 +97,11 @@ static void angle_velocity_to_pixel_velocity(const CameraParams *camera, float y
   float cos_pitch = cosf(pitch_rad);
   float dyaw = v_yaw_deg * (float)M_PI / 180.0f;
   float dpitch = v_pitch_deg * (float)M_PI / 180.0f;
-  float dx_dyaw = camera->fx / (cos_yaw * cos_yaw);
-  float dy_dpitch = camera->fy / (cos_pitch * cos_pitch);
-  *v_px = dx_dyaw * dyaw;
-  *v_py = dy_dpitch * dpitch;
+  // 相机旋转 90° + 右上为正：yaw速度→垂直(y, 上正), pitch速度→水平(x, 右正)
+  float dx_dpitch = camera->fx / (cos_pitch * cos_pitch);
+  float dy_dyaw = camera->fy / (cos_yaw * cos_yaw);
+  *v_px = dx_dpitch * dpitch;
+  *v_py = -dy_dyaw * dyaw;
 }
 
 #include <stdbool.h>
@@ -299,9 +301,11 @@ static bool measure_best_angle(const VIDEO_FRAME_INFO_S *frame, const cvtdl_obje
 
   float center_x = (obj->bbox.x1 + obj->bbox.x2) * 0.5f;
   float center_y = (obj->bbox.y1 + obj->bbox.y2) * 0.5f;
+  float bbox_w = obj->bbox.x2 - obj->bbox.x1;
   float bbox_h = obj->bbox.y2 - obj->bbox.y1;
-  float measure_x = center_x;
-  float measure_y = center_y - TARGET_UP_OFFSET_HEIGHT_FACTOR * bbox_h;
+  // 相机旋转 90° 后，原来的“向上偏移”变为“向左偏移”
+  float measure_x = center_x - TARGET_UP_OFFSET_HEIGHT_FACTOR * bbox_w;
+  float measure_y = center_y;
 
   measure_x = clamp_float(measure_x, 0.0f, (float)(frame->stVFrame.u32Width - 1));
   measure_y = clamp_float(measure_y, 0.0f, (float)(frame->stVFrame.u32Height - 1));
@@ -323,7 +327,6 @@ static bool measure_best_angle(const VIDEO_FRAME_INFO_S *frame, const cvtdl_obje
 
   *distance_m = 0.0f;
   *distance_valid = false;
-  float bbox_w = obj->bbox.x2 - obj->bbox.x1;
   if (bbox_w > 0.0f && bbox_h > 0.0f) {
     float scale = 1.0f;
     if (state->crop_size > 0 && state->crop_scale > 1e-6f) {
@@ -342,8 +345,10 @@ static bool measure_best_angle(const VIDEO_FRAME_INFO_S *frame, const cvtdl_obje
     }
   }
 
-  *yaw_deg = angle_x * 180.0f / (float)M_PI - state->optical_axis_yaw_comp_deg;
-  *pitch_deg = angle_y * 180.0f / (float)M_PI - state->optical_axis_pitch_comp_deg;
+  // 相机物理旋转 90°：图像 x 轴 → 世界俯仰，图像 y 轴 → 世界偏航
+  // 右上角为正方向：orig_x>cx(right)→pitch>0, orig_y<cy(top)→yaw>0
+  *yaw_deg = -angle_y * 180.0f / (float)M_PI - state->optical_axis_yaw_comp_deg;
+  *pitch_deg = angle_x * 180.0f / (float)M_PI - state->optical_axis_pitch_comp_deg;
   return true;
 }
 

@@ -13,8 +13,6 @@
 // 图像尺寸（推理与编码统一）
 #define IMAGE_WIDTH 320
 #define IMAGE_HEIGHT 320
-// 推理裁剪尺寸（从传感器中心裁剪，再缩放到推理尺寸）
-#define CROP_SIZE 640
 
 // 绿色在 YUV 空间特征：U 和 V 分量都偏低 (< 128)
 // 考虑到环境光干扰，建议设置在 110-120 之间
