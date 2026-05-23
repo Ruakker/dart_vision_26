@@ -31,8 +31,9 @@ static void optical_axis_comp_to_pixel(const State *state, float *px, float *py)
   }
   float yaw_rad = state->optical_axis_yaw_comp_deg * (float)M_PI / 180.0f;
   float pitch_rad = state->optical_axis_pitch_comp_deg * (float)M_PI / 180.0f;
-  *px = tanf(yaw_rad) * state->camera.fx + state->camera.cx;
-  *py = tanf(pitch_rad) * state->camera.fy + state->camera.cy;
+  // 相机旋转 90°：pitch→x(右正), yaw→y(上正)
+  *px = tanf(pitch_rad) * state->camera.fx + state->camera.cx;
+  *py = -tanf(yaw_rad) * state->camera.fy + state->camera.cy;
 }
 
 // 编码/绘制线程：从 VPSS 取帧 -> 画框 -> RTSP 推流
@@ -160,7 +161,7 @@ static CVI_S32 draw_overlay(VencThreadArgs *thread_args, VIDEO_FRAME_INFO_S *stF
     return CVI_SUCCESS;
   }
 
-  // 将相机坐标系像素映射到当前输出帧坐标系（320x320）
+  // 将传感器坐标映射到旋转后的显示帧坐标系（320x320，VPSS 90° CW）
   float disp_px = track.px;
   float disp_py = track.py;
   float disp_cx = 0.0f;
@@ -169,13 +170,21 @@ static CVI_S32 draw_overlay(VencThreadArgs *thread_args, VIDEO_FRAME_INFO_S *stF
   float disp_vx = track.v_px;
   float disp_vy = track.v_py;
   if (thread_args->state->crop_size > 0 && thread_args->state->crop_scale > 1e-6f) {
+    float S = (float)thread_args->state->crop_size;
     float inv_scale = 1.0f / thread_args->state->crop_scale;
-    disp_px = (track.px - (float)thread_args->state->crop_x) * inv_scale;
-    disp_py = (track.py - (float)thread_args->state->crop_y) * inv_scale;
-    disp_cx = (disp_cx - (float)thread_args->state->crop_x) * inv_scale;
-    disp_cy = (disp_cy - (float)thread_args->state->crop_y) * inv_scale;
-    disp_vx = track.v_px * inv_scale;
-    disp_vy = track.v_py * inv_scale;
+    // 目标位置：传感器坐标 → 裁剪区域 → 旋转 90° CW → 缩放
+    float sx = track.px - (float)thread_args->state->crop_x;
+    float sy = track.py - (float)thread_args->state->crop_y;
+    disp_px = (S - 1.0f - sy) * inv_scale;
+    disp_py = sx * inv_scale;
+    // 光心：同样变换
+    float ocx = disp_cx - (float)thread_args->state->crop_x;
+    float ocy = disp_cy - (float)thread_args->state->crop_y;
+    disp_cx = (S - 1.0f - ocy) * inv_scale;
+    disp_cy = ocx * inv_scale;
+    // 速度：旋转后 x/y 互换，符号调整
+    disp_vx = -track.v_py * inv_scale;
+    disp_vy = track.v_px * inv_scale;
   }
 
   cvtdl_service_brush_t red_brush = CVI_TDL_Service_GetDefaultBrush();

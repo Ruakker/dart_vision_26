@@ -169,6 +169,18 @@ static CVI_S32 init_middleware(const AppConfig *cfg, SAMPLE_TDL_MW_CONTEXT *mw_c
     return CVI_FAILURE;
   }
 
+  // CHN0（编码）、CHN1（推理）：VPSS 硬件旋转 90°
+  s32Ret = CVI_VPSS_SetChnRotation(0, VPSS_CHN0, ROTATION_90);
+  if (s32Ret != CVI_SUCCESS) {
+    printf("CVI_VPSS_SetChnRotation chn0 failed! ret=%#x\n", s32Ret);
+    return CVI_FAILURE;
+  }
+  s32Ret = CVI_VPSS_SetChnRotation(0, VPSS_CHN1, ROTATION_90);
+  if (s32Ret != CVI_SUCCESS) {
+    printf("CVI_VPSS_SetChnRotation chn1 failed! ret=%#x\n", s32Ret);
+    return CVI_FAILURE;
+  }
+
   // VPSS 裁剪：取右侧正方形区域，再缩放到推理输入尺寸
   CVI_U32 crop_size = (stSensorSize.u32Width < stSensorSize.u32Height)
                           ? stSensorSize.u32Width
@@ -208,6 +220,8 @@ static CVI_S32 init_middleware(const AppConfig *cfg, SAMPLE_TDL_MW_CONTEXT *mw_c
     printf("CVI_VPSS_SetChnCrop chn1 failed with %#x\n", s32Ret);
     return CVI_FAILURE;
   }
+
+  return CVI_SUCCESS;
 
   return CVI_SUCCESS;
 }

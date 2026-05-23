@@ -45,7 +45,7 @@ static void angle_to_pixel(const CameraParams *camera, float yaw_deg, float pitc
 
   float yaw_rad = yaw_deg * (float)M_PI / 180.0f;
   float pitch_rad = pitch_deg * (float)M_PI / 180.0f;
-  // 相机旋转 90° + 右上为正：yaw→垂直(y, 上正), pitch→水平(x, 右正)
+  // 相机旋转 90°：yaw→垂直(y, 上正), pitch→水平(x, 右正)
   *px = tanf(pitch_rad) * camera->fx + camera->cx;
   *py = -tanf(yaw_rad) * camera->fy + camera->cy;
 }
@@ -71,12 +71,22 @@ static bool predict_pixel_from_kf(const State *state, float dt, float *px, float
   float orig_y = 0.0f;
   angle_to_pixel(&state->camera, raw_pred_yaw, raw_pred_pitch, &orig_x, &orig_y);
 
+  // 传感器坐标 → 裁剪区域坐标
+  float crop_x = orig_x - (float)state->crop_x;
+  float crop_y = orig_y - (float)state->crop_y;
+
+  // 裁剪区域坐标 → 旋转后坐标（VPSS 90° CW）
+  float S = (float)state->crop_size;
+  float rot_x = S - 1.0f - crop_y;
+  float rot_y = crop_x;
+
+  // 旋转后坐标 → 推理图坐标（缩放到 320×320）
   if (state->crop_size > 0 && state->crop_scale > 1e-6f) {
-    *px = (orig_x - (float)state->crop_x) / state->crop_scale;
-    *py = (orig_y - (float)state->crop_y) / state->crop_scale;
+    *px = rot_x / state->crop_scale;
+    *py = rot_y / state->crop_scale;
   } else {
-    *px = orig_x;
-    *py = orig_y;
+    *px = rot_x;
+    *py = rot_y;
   }
   return true;
 }
@@ -97,7 +107,7 @@ static void angle_velocity_to_pixel_velocity(const CameraParams *camera, float y
   float cos_pitch = cosf(pitch_rad);
   float dyaw = v_yaw_deg * (float)M_PI / 180.0f;
   float dpitch = v_pitch_deg * (float)M_PI / 180.0f;
-  // 相机旋转 90° + 右上为正：yaw速度→垂直(y, 上正), pitch速度→水平(x, 右正)
+  // 相机旋转 90°：pitch速度→水平(x), yaw速度→垂直(y, 上正)
   float dx_dpitch = camera->fx / (cos_pitch * cos_pitch);
   float dy_dyaw = camera->fy / (cos_yaw * cos_yaw);
   *v_px = dx_dpitch * dpitch;
@@ -301,22 +311,29 @@ static bool measure_best_angle(const VIDEO_FRAME_INFO_S *frame, const cvtdl_obje
 
   float center_x = (obj->bbox.x1 + obj->bbox.x2) * 0.5f;
   float center_y = (obj->bbox.y1 + obj->bbox.y2) * 0.5f;
-  float bbox_w = obj->bbox.x2 - obj->bbox.x1;
   float bbox_h = obj->bbox.y2 - obj->bbox.y1;
-  // 相机旋转 90° 后，原来的“向上偏移”变为“向左偏移”
-  float measure_x = center_x - TARGET_UP_OFFSET_HEIGHT_FACTOR * bbox_w;
-  float measure_y = center_y;
+  float measure_x = center_x;
+  float measure_y = center_y - TARGET_UP_OFFSET_HEIGHT_FACTOR * bbox_h;
 
   measure_x = clamp_float(measure_x, 0.0f, (float)(frame->stVFrame.u32Width - 1));
   measure_y = clamp_float(measure_y, 0.0f, (float)(frame->stVFrame.u32Height - 1));
 
-  // 推理图坐标 -> 原始相机坐标（裁剪 + 缩放）
-  float orig_x = measure_x;
-  float orig_y = measure_y;
+  // 推理图坐标 → 旋转后坐标（缩放到裁剪区域尺寸）
+  float scaled_x = measure_x;
+  float scaled_y = measure_y;
   if (state->crop_size > 0 && state->crop_scale > 1e-6f) {
-    orig_x = measure_x * state->crop_scale + (float)state->crop_x;
-    orig_y = measure_y * state->crop_scale + (float)state->crop_y;
+    scaled_x = measure_x * state->crop_scale;
+    scaled_y = measure_y * state->crop_scale;
   }
+
+  // 旋转后坐标 → 裁剪区域坐标（反旋转 90° CW = 90° CCW）
+  float S = (float)state->crop_size;
+  float unrot_x = scaled_y;
+  float unrot_y = S - 1.0f - scaled_x;
+
+  // 裁剪区域坐标 → 原始传感器坐标
+  float orig_x = unrot_x + (float)state->crop_x;
+  float orig_y = unrot_y + (float)state->crop_y;
 
   float angle_x = 0.0f;
   float angle_y = 0.0f;
@@ -327,6 +344,7 @@ static bool measure_best_angle(const VIDEO_FRAME_INFO_S *frame, const cvtdl_obje
 
   *distance_m = 0.0f;
   *distance_valid = false;
+  float bbox_w = obj->bbox.x2 - obj->bbox.x1;
   if (bbox_w > 0.0f && bbox_h > 0.0f) {
     float scale = 1.0f;
     if (state->crop_size > 0 && state->crop_scale > 1e-6f) {
@@ -345,8 +363,7 @@ static bool measure_best_angle(const VIDEO_FRAME_INFO_S *frame, const cvtdl_obje
     }
   }
 
-  // 相机物理旋转 90°：图像 x 轴 → 世界俯仰，图像 y 轴 → 世界偏航
-  // 右上角为正方向：orig_x>cx(right)→pitch>0, orig_y<cy(top)→yaw>0
+  // 相机旋转 90°：sensor x→pitch(右正), sensor y→yaw(上正, 取负)
   *yaw_deg = -angle_y * 180.0f / (float)M_PI - state->optical_axis_yaw_comp_deg;
   *pitch_deg = angle_x * 180.0f / (float)M_PI - state->optical_axis_pitch_comp_deg;
   return true;
