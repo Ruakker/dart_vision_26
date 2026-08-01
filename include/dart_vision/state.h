@@ -34,6 +34,10 @@ typedef struct {
   uint64_t track_seq;                // 追踪更新序号（防止丢唤醒）
   struct timespec track_ts;          // 上次卡尔曼更新时刻（单调时钟）
   bool track_ts_valid;               // 时间戳有效标记
+  float feedback_data[4];            // 最新串口反馈数据
+  bool feedback_valid;               // 是否收到过串口反馈
+  uint64_t feedback_seq;             // 串口反馈更新序号
+  pthread_mutex_t feedback_mutex;    // 保护串口反馈数据
   bool record_enable;                // 是否录制
   FILE *record_fp;                   // 录制文件句柄
   FILE *log_fp;                      // 日志文件句柄
@@ -53,5 +57,9 @@ void state_update_track(State *state, const TrackOutput *src);
 void state_copy_track(State *state, TrackOutput *dst);
 void state_update_track_ts(State *state, const struct timespec *ts);
 bool state_copy_track_ts(State *state, struct timespec *ts);
+
+// 更新/复制串口反馈（内部带锁）
+void state_update_feedback(State *state, const float data[4]);
+bool state_copy_feedback(State *state, float data[4], uint64_t *seq);
 
 #endif

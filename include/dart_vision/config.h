@@ -52,6 +52,7 @@ typedef struct {
 	float optical_axis_pitch_comp_deg;
 	float model_thresh;
 	bool record_enable;
+	bool log_enable;
 	char record_dir[256];
 	bool raw;
 } AppConfig;

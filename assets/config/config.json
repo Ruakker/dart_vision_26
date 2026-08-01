@@ -12,6 +12,7 @@
   },
   "record": {
     "enable": false,
+    "log_enable": false,
     "path": "/root/record"
   },
   "tracker": {

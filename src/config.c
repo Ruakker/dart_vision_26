@@ -84,6 +84,7 @@ void config_set_defaults(AppConfig *cfg) {
   cfg->optical_axis_pitch_comp_deg = 0.0f;
   cfg->model_thresh = MODEL_THRESH_DEFAULT;
   cfg->record_enable = false;
+  cfg->log_enable = false;
   snprintf(cfg->record_dir, sizeof(cfg->record_dir), "%s", "/root");
 }
 
@@ -137,6 +138,7 @@ bool load_app_config(const char *path, AppConfig *cfg) {
   cJSON *record = cJSON_GetObjectItem(root, "record");
   if (cJSON_IsObject(record)) {
     json_read_bool(record, "enable", &cfg->record_enable);
+    json_read_bool(record, "log_enable", &cfg->log_enable);
     json_read_string(record, "path", cfg->record_dir, sizeof(cfg->record_dir));
   }
 

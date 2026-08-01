@@ -15,6 +15,7 @@
 
 #include "../include/dart_vision/state.h"
 #include "../include/dart_vision/tdl.h"
+#include "osd_rgn.h"
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -121,20 +122,12 @@ send_failed:
   return s32Ret;
 }
 
-// 绘制检测框与跟踪信息（中心线、十字、速度箭头、文字）
+// 绘制检测框与跟踪信息（中心线、十字、速度箭头）
 static CVI_S32 draw_overlay(VencThreadArgs *thread_args, VIDEO_FRAME_INFO_S *stFrame,
                             cvtdl_object_t *stObjMeta) {
   if (!stFrame) {
     return CVI_FAILURE;
   }
-  // 添加时间戳到左下角
-  struct timespec ts;
-  clock_gettime(CLOCK_REALTIME, &ts);
-  struct tm tm_info;
-  localtime_r(&ts.tv_sec, &tm_info);
-  char time_str[20];
-  snprintf(time_str, sizeof(time_str), "%02d:%02d.%03ld", tm_info.tm_min, tm_info.tm_sec, ts.tv_nsec / 1000000);
-  CVI_TDL_Service_ObjectWriteText(time_str, 10, stFrame->stVFrame.u32Height - 10, stFrame, 255, 255, 255);
 
   if (!thread_args || !stFrame || !stObjMeta) {
     return CVI_FAILURE;
@@ -285,17 +278,53 @@ static CVI_S32 draw_overlay(VencThreadArgs *thread_args, VIDEO_FRAME_INFO_S *stF
     CVI_TDL_Service_DrawPolygon(thread_args->service_handle, stFrame, &arrow_pts, yellow_brush);
   }
 
-  char text[128];
-  snprintf(text, sizeof(text), "%.2f %.2f", track.yaw, track.pitch);
-  CVI_TDL_Service_ObjectWriteText(text, 1, 25, stFrame, 255, 0, 0);
-  if (track.distance_valid) {
-    snprintf(text, sizeof(text), "%.3fm", track.distance);
-  } else {
-    snprintf(text, sizeof(text), "N/A");
-  }
-  CVI_TDL_Service_ObjectWriteText(text, 1, 55, stFrame, 255, 0, 0);
-
   return CVI_SUCCESS;
+}
+
+static void update_osd(VencThreadArgs *thread_args, OsdRgnContext *osd) {
+  TrackOutput track = {0};
+  float feedback[4] = {0};
+  state_copy_track(thread_args->state, &track);
+  bool feedback_valid = state_copy_feedback(thread_args->state, feedback, NULL);
+
+  char yaw_text[OSD_RGN_TEXT_MAX];
+  char pitch_text[OSD_RGN_TEXT_MAX];
+  char distance_text[OSD_RGN_TEXT_MAX];
+  char data1_text[OSD_RGN_TEXT_MAX];
+  char data2_text[OSD_RGN_TEXT_MAX];
+  char data3_text[OSD_RGN_TEXT_MAX];
+  char data4_text[OSD_RGN_TEXT_MAX];
+  char time_text[OSD_RGN_TEXT_MAX];
+  snprintf(yaw_text, sizeof(yaw_text), "Y:%.2f", track.yaw);
+  snprintf(pitch_text, sizeof(pitch_text), "P:%.2f", track.pitch);
+  if (track.distance_valid) {
+    snprintf(distance_text, sizeof(distance_text), "D:%.3fm", track.distance);
+  } else {
+    snprintf(distance_text, sizeof(distance_text), "D:N/A");
+  }
+  if (feedback_valid) {
+    snprintf(data1_text, sizeof(data1_text), "%.3f", feedback[0]);
+    snprintf(data2_text, sizeof(data2_text), "%.3f", feedback[1]);
+    snprintf(data3_text, sizeof(data3_text), "%.3f", feedback[2]);
+    snprintf(data4_text, sizeof(data4_text), "%.3f", feedback[3]);
+  } else {
+    data1_text[0] = '\0';
+    data2_text[0] = '\0';
+    data3_text[0] = '\0';
+    data4_text[0] = '\0';
+  }
+
+  struct timespec ts;
+  clock_gettime(CLOCK_REALTIME, &ts);
+  struct tm tm_info;
+  localtime_r(&ts.tv_sec, &tm_info);
+  snprintf(time_text, sizeof(time_text), "%02d:%02d.%03ld", tm_info.tm_min,
+           tm_info.tm_sec, ts.tv_nsec / 1000000);
+
+  const char *lines[OSD_RGN_LINES] = {
+      yaw_text, pitch_text, distance_text, data1_text,
+      data2_text, data3_text, data4_text, time_text};
+  osd_rgn_update(osd, lines);
 }
 
 void *run_venc(void *args) {
@@ -305,6 +334,14 @@ void *run_venc(void *args) {
   VIDEO_FRAME_INFO_S stFrame;
   CVI_S32 s32Ret;
   cvtdl_object_t stObjMeta = {0};
+  OsdRgnContext osd = {0};
+  if (!thread_args->state->raw) {
+    if (osd_rgn_init(&osd) != CVI_SUCCESS) {
+      printf("OSD RGN initialization failed\n");
+      state_request_exit(thread_args->state);
+      pthread_exit(NULL);
+    }
+  }
 
   while (!state_should_exit(thread_args->state)) {
     // 从 VPSS Chn0 获取编码/显示帧
@@ -316,9 +353,9 @@ void *run_venc(void *args) {
     }
 
     if (!thread_args->state->raw) {
+      update_osd(thread_args, &osd);
       s32Ret = draw_overlay(thread_args, &stFrame, &stObjMeta);
       if (s32Ret != CVI_SUCCESS) {
-        CVI_VPSS_ReleaseChnFrame(0, 0, &stFrame);
         printf("Draw frame fail!, ret=%x\n", s32Ret);
         goto error;
       }
@@ -330,7 +367,6 @@ void *run_venc(void *args) {
                            ? thread_args->state->record_fp
                            : NULL);
     if (s32Ret != CVI_SUCCESS) {
-      CVI_VPSS_ReleaseChnFrame(0, 0, &stFrame);
       printf("Send Output Frame NG, ret=%x\n", s32Ret);
       goto error;
     }
@@ -343,6 +379,7 @@ void *run_venc(void *args) {
     }
   }
 
+  osd_rgn_deinit(&osd);
   printf("Exit encoder thread\n");
   pthread_exit(NULL);
 }

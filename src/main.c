@@ -281,6 +281,7 @@ void state_init(State *state, bool raw) {
   state->crop_scale = 1.0f;
   pthread_mutex_init(&state->obj_mutex, NULL);
   pthread_mutex_init(&state->track_mutex, NULL);
+  pthread_mutex_init(&state->feedback_mutex, NULL);
   pthread_cond_init(&state->track_cv, NULL);
   kalman_config_init(&state->kf_cfg);
   state->kf.initialized = false;
@@ -297,6 +298,7 @@ void state_destroy(State *state) {
   pthread_mutex_destroy(&state->obj_mutex);
   pthread_cond_destroy(&state->track_cv);
   pthread_mutex_destroy(&state->track_mutex);
+  pthread_mutex_destroy(&state->feedback_mutex);
   if (state->record_fp) {
     fclose(state->record_fp);
     state->record_fp = NULL;
@@ -402,32 +404,75 @@ bool state_copy_track_ts(State *state, struct timespec *ts) {
   return valid;
 }
 
-// -------------------- 录制 --------------------
-// 在目录下按序号创建录制文件（record_0000.h264 ...）
-static FILE *open_record_file(const char *dir_path, FILE **log_fp) {
-  if (!dir_path || dir_path[0] == '\0') {
-    *log_fp = NULL;
-    return NULL;
+void state_update_feedback(State *state, const float data[4]) {
+  if (!state || !data) {
+    return;
   }
 
-  char full_path[512];
+  pthread_mutex_lock(&state->feedback_mutex);
+  memcpy(state->feedback_data, data, sizeof(state->feedback_data));
+  state->feedback_valid = true;
+  state->feedback_seq++;
+  pthread_mutex_unlock(&state->feedback_mutex);
+}
+
+bool state_copy_feedback(State *state, float data[4], uint64_t *seq) {
+  if (!state || !data) {
+    return false;
+  }
+
+  bool valid = false;
+  pthread_mutex_lock(&state->feedback_mutex);
+  if (state->feedback_valid) {
+    memcpy(data, state->feedback_data, sizeof(state->feedback_data));
+    if (seq) {
+      *seq = state->feedback_seq;
+    }
+    valid = true;
+  }
+  pthread_mutex_unlock(&state->feedback_mutex);
+  return valid;
+}
+
+// 在目录下按同一序号创建录像和日志文件。
+static void open_record_files(const char *dir_path, bool record_enable, bool log_enable,
+                              FILE **record_fp, FILE **log_fp) {
+  if (!record_fp || !log_fp) {
+    return;
+  }
+
+  *record_fp = NULL;
+  *log_fp = NULL;
+  if (!dir_path || dir_path[0] == '\0' || (!record_enable && !log_enable)) {
+    return;
+  }
+  char record_path[512];
   char log_path[512];
   for (int idx = 0; idx < 10000; idx++) {
-    snprintf(full_path, sizeof(full_path), "%s/record_%04d.h264", dir_path, idx);
+    snprintf(record_path, sizeof(record_path), "%s/record_%04d.h264", dir_path, idx);
     snprintf(log_path, sizeof(log_path), "%s/log_%04d.txt", dir_path, idx);
+
     struct stat st;
-    if (stat(full_path, &st) == 0) {
+    if (stat(record_path, &st) == 0 || stat(log_path, &st) == 0) {
       continue;
     }
-    FILE *fp = fopen(full_path, "wb");
-    if (fp) {
-      *log_fp = fopen(log_path, "w");
+
+    if (record_enable) {
+      *record_fp = fopen(record_path, "wb");
+      if (!*record_fp) {
+        printf("Warning: Failed to open record file: %s\n", record_path);
+      }
     }
-    return fp;
+    if (log_enable) {
+      *log_fp = fopen(log_path, "w");
+      if (!*log_fp) {
+        printf("Warning: Failed to open log file: %s\n", log_path);
+      }
+    }
+    return;
   }
 
-  *log_fp = NULL;
-  return NULL;
+  printf("Warning: No available record/log file index in dir: %s\n", dir_path);
 }
 
 // -------------------- 曝光控制 --------------------
@@ -552,16 +597,19 @@ int main(int argc, char **argv) {
     printf("Kalman config loaded: %s\n", APP_CONFIG_PATH);
   }
 
-  // 录制初始化：按开关创建文件
+  // 录像与串口日志写盘按独立开关初始化，共用输出目录和文件序号。
   state.record_enable = cfg.record_enable;
-  if (cfg.record_enable && cfg.record_dir[0] != '\0') {
-    state.record_fp = open_record_file(cfg.record_dir, &state.log_fp);
-    if (!state.record_fp) {
-      printf("Warning: Failed to open record file in dir: %s\n", cfg.record_dir);
-      state.record_enable = false;
-    } else {
-      printf("Record enabled, dir: %s\n", cfg.record_dir);
-    }
+  if ((cfg.record_enable || cfg.log_enable) && cfg.record_dir[0] != '\0') {
+    open_record_files(cfg.record_dir, cfg.record_enable, cfg.log_enable,
+                      &state.record_fp, &state.log_fp);
+  }
+  if (cfg.record_enable && !state.record_fp) {
+    state.record_enable = false;
+  } else if (state.record_fp) {
+    printf("Record enabled, dir: %s\n", cfg.record_dir);
+  }
+  if (cfg.log_enable && state.log_fp) {
+    printf("Feedback log enabled, dir: %s\n", cfg.record_dir);
   }
 
   // UART 初始化

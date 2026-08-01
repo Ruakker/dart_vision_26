@@ -62,6 +62,7 @@ set(DART_VISION_SRC
     src/uart.c
     src/tdl.c
     src/venc.c
+    src/osd_rgn.c
     src/kalman.c
     src/cJSON.c
     src/serial/drv_cmd_com.c

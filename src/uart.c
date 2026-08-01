@@ -135,17 +135,15 @@ void feedback_callback(void *data) {
            tm_info.tm_sec, ts.tv_nsec / 1000000);
 
   // 写入日志文件
+  float feedback_data[4] = {pkt->data1, pkt->data2, pkt->data3, pkt->data4};
+  if (uart_g_state) {
+    state_update_feedback(uart_g_state, feedback_data);
+  }
+
   if (uart_g_state && uart_g_state->log_fp) {
-    // 将所有的收到的内容写入日志文件中
-    // fprintf(uart_g_state->log_fp, "[%s] u: %.2f, v: %.2f, w: %.2f, Pitch:
-    // %.2f, Yaw: %.2f\n",
-    //         time_str,
-    //         pkt->u, pkt->v, pkt->w, pkt->Pitch, pkt->Yaw);
     fprintf(uart_g_state->log_fp,
-            "[%s] time: %.2f, acc: %.2f, pitch_err: %.2f, d_pitch_err: %.2f\n", time_str,
-            pkt->time, pkt->acc, pkt->pitch_err, pkt->d_pitch_err);
-    // printf("[%s] time: %.2f, acc: %.2f\n", time_str,
-    //         pkt->time, pkt->acc);
+            "[%s] %.2f %.2f %.2f %.2f\n", time_str,
+            pkt->data1, pkt->data2, pkt->data3, pkt->data4);
     logger_cnt++;
     if (logger_cnt >= 30) {
       fflush(uart_g_state->log_fp); // 定期刷新，防止数据丢失
