@@ -186,7 +186,7 @@ static CVI_S32 init_middleware(const AppConfig *cfg, SAMPLE_TDL_MW_CONTEXT *mw_c
                           ? stSensorSize.u32Width
                           : stSensorSize.u32Height;
   crop_size &= ~1U; // 对齐到偶数
-  CVI_S32 crop_x = (CVI_S32)(stSensorSize.u32Width - crop_size); // 靠右
+  CVI_S32 crop_x = (CVI_S32)(stSensorSize.u32Width - crop_size - 180); // 靠右
   CVI_S32 crop_y = 0; // 垂直方向不裁剪
   crop_x &= ~1;
 
