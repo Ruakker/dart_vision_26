@@ -26,6 +26,7 @@
 #include "cvi_ae.h"
 #include "cvi_comm_isp.h"
 #include "cvi_isp.h"
+#include "dart_vision/record_writer.h"
 #include "dart_vision/visual_data.h"
 #include "tool/drv_cmd_com.h"
 
@@ -664,6 +665,25 @@ int main(int argc, char **argv) {
     return -1;
   }
 
+  RecordWriter record_writer = {0};
+  if (state.record_enable) {
+    RecordWriterConfig record_writer_config = {
+        .max_bytes = 16 * 1024 * 1024,
+        .max_frames = 120,
+        .sync_interval_frames = 40,
+    };
+    record_writer_init(&record_writer, state.record_fp, &record_writer_config);
+    if (!record_writer_start(&record_writer)) {
+      printf("Error: Failed to start record writer thread\n");
+      record_writer_destroy(&record_writer);
+      CVI_TDL_Service_DestroyHandle(service_handle);
+      CVI_TDL_DestroyHandle(tdl_handle);
+      SAMPLE_TDL_Destroy_MW(&mw_context);
+      state_destroy(&state);
+      return -1;
+    }
+  }
+
   pthread_t uart_recv_thread;
   pthread_t uart_send_thread;
   pthread_t venc_thread;
@@ -677,21 +697,75 @@ int main(int argc, char **argv) {
       .mw_context = &mw_context,
       .service_handle = service_handle,
       .state = &state,
+      .record_writer = record_writer.started ? &record_writer : NULL,
   };
   TdlThreadArgs tdl_args = {
       .tdl_handle = tdl_handle,
       .state = &state,
   };
 
-  pthread_create(&uart_recv_thread, NULL, run_uart_recv, &uart_args);
-  pthread_create(&uart_send_thread, NULL, run_uart_send, &uart_args);
-  pthread_create(&venc_thread, NULL, run_venc, &venc_args);
-  pthread_create(&tdl_thread, NULL, run_tdl, &tdl_args);
+  bool uart_recv_started = false;
+  bool uart_send_started = false;
+  bool venc_started = false;
+  bool tdl_started = false;
+  if (pthread_create(&uart_recv_thread, NULL, run_uart_recv, &uart_args) != 0) {
+    printf("Error: Failed to start UART receive thread\n");
+    goto thread_start_error;
+  }
+  uart_recv_started = true;
+  if (pthread_create(&uart_send_thread, NULL, run_uart_send, &uart_args) != 0) {
+    printf("Error: Failed to start UART send thread\n");
+    goto thread_start_error;
+  }
+  uart_send_started = true;
+  if (pthread_create(&venc_thread, NULL, run_venc, &venc_args) != 0) {
+    printf("Error: Failed to start VENC thread\n");
+    goto thread_start_error;
+  }
+  venc_started = true;
+  if (pthread_create(&tdl_thread, NULL, run_tdl, &tdl_args) != 0) {
+    printf("Error: Failed to start TDL thread\n");
+    goto thread_start_error;
+  }
+  tdl_started = true;
 
-  pthread_join(uart_recv_thread, NULL);
-  pthread_join(uart_send_thread, NULL);
-  pthread_join(venc_thread, NULL);
-  pthread_join(tdl_thread, NULL);
+thread_start_error:
+  if (!tdl_started || !venc_started || !uart_send_started || !uart_recv_started) {
+    state_request_exit(&state);
+  }
+  if (uart_recv_started) {
+    pthread_join(uart_recv_thread, NULL);
+  }
+  if (uart_send_started) {
+    pthread_join(uart_send_thread, NULL);
+  }
+  if (venc_started) {
+    pthread_join(venc_thread, NULL);
+  }
+  if (tdl_started) {
+    pthread_join(tdl_thread, NULL);
+  }
+
+  if (record_writer.started) {
+    record_writer_request_stop(&record_writer);
+    record_writer_join(&record_writer);
+
+    RecordWriterStats record_stats = {0};
+    record_writer_get_stats(&record_writer, &record_stats);
+    printf("Record writer: submitted=%llu written=%llu dropped=%llu waiting_idr=%llu "
+           "bytes=%llu peak=%zuB/%u frames errors=%llu/%llu/%llu/%llu\n",
+           (unsigned long long)record_stats.submitted_frames,
+           (unsigned long long)record_stats.written_frames,
+           (unsigned long long)record_stats.dropped_frames,
+           (unsigned long long)record_stats.dropped_waiting_idr,
+           (unsigned long long)record_stats.written_bytes,
+           record_stats.peak_queued_bytes, record_stats.peak_queued_frames,
+           (unsigned long long)record_stats.allocation_errors,
+           (unsigned long long)record_stats.write_errors,
+           (unsigned long long)record_stats.flush_errors,
+           (unsigned long long)record_stats.sync_errors);
+    record_writer_destroy(&record_writer);
+  }
 
   CVI_TDL_Service_DestroyHandle(service_handle);
   CVI_TDL_DestroyHandle(tdl_handle);

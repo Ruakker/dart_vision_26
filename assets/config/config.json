@@ -1,17 +1,17 @@
 {
   "exposure": {
-    "manual_exposure_time_us": 8000,
+    "manual_exposure_time_us": 1000,
     "auto_target_luma": 30
   },
   "model": {
-    "threshold": 0.1
+    "threshold": 0.01
   },
   "optical_axis_compensation": {
     "yaw_deg": 0.0,
     "pitch_deg": 0.0
   },
   "record": {
-    "enable": false,
+    "enable": true,
     "log_enable": false,
     "path": "/root/record"
   },

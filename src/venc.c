@@ -41,9 +41,7 @@ static void optical_axis_comp_to_pixel(const State *state, float *px, float *py)
 // 非 raw 模式时，始终叠加可视化信息。
 static CVI_S32 send_frame_rtsp_record(VIDEO_FRAME_INFO_S *stVencFrame,
                                       SAMPLE_TDL_MW_CONTEXT *pstMWContext,
-                                      FILE *record_fp) {
-  static unsigned int s_record_frame_count = 0;
-  const unsigned int kRecordSyncFrameInterval = 40;
+                                      RecordWriter *record_writer) {
   CVI_S32 s32Ret = CVI_SUCCESS;
   CVI_S32 s32SetFrameMilliSec = 20000;
   VENC_STREAM_S stStream;
@@ -94,18 +92,10 @@ static CVI_S32 send_frame_rtsp_record(VIDEO_FRAME_INFO_S *stVencFrame,
     ppack = &stStream.pstPack[i];
     data.dataPtr[i] = ppack->pu8Addr + ppack->u32Offset;
     data.dataLen[i] = ppack->u32Len - ppack->u32Offset;
-    if (record_fp) {
-      fwrite(data.dataPtr[i], 1, data.dataLen[i], record_fp);
-    }
   }
 
-  if (record_fp) {
-    s_record_frame_count++;
-    if (s_record_frame_count >= kRecordSyncFrameInterval) {
-      fflush(record_fp);
-      fdatasync(fileno(record_fp));
-      s_record_frame_count = 0;
-    }
+  if (record_writer) {
+    record_writer_submit(record_writer, &stStream);
   }
 
   s32Ret =
@@ -363,9 +353,7 @@ void *run_venc(void *args) {
 
     // 推流输出
     s32Ret = send_frame_rtsp_record(&stFrame, thread_args->mw_context,
-                         thread_args->state->record_enable
-                           ? thread_args->state->record_fp
-                           : NULL);
+                                    thread_args->record_writer);
     if (s32Ret != CVI_SUCCESS) {
       printf("Send Output Frame NG, ret=%x\n", s32Ret);
       goto error;
