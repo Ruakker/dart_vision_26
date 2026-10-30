@@ -1,4 +1,80 @@
+# ============================================================
+# DartVision .gitignore
+# ============================================================
+
+# ---------- 构建产物 ----------
 build/
-.cache/
+build-*/
+cmake-build-*/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+compile_commands.json
+bin/
+*.o
+*.d
+*.a
+*.so
+*.so.*
+
+# ---------- 第三方 SDK（体积大，按 docs/SDK.md 单独获取）----------
+sdk/*
+!sdk/README.md
+!sdk/.gitkeep
+
+# ---------- Python ----------
 .venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.cache/
+
+# ---------- 运行时 / 标定输出 ----------
 calib_output*/
+record/
+*.h264
+*.mp4
+*.log
+log_*.txt
+record_*.h264
+
+# ---------- 板端私有文件 ----------
+# 个人 SSH 公钥、串口终端描述文件、预编译二进制都不应进入仓库
+assets/files/root/.ssh/
+assets/files/root/.terminfo/
+assets/files/root/record/
+assets/files/root/dart_vision
+
+# ---------- 板端系统镜像 ----------
+# 来自 Sipeed 官方 MaixCAM 固件，体积大且非本项目产物，只保留部署说明
+assets/files/boot/*
+!assets/files/boot/uEnv.txt
+
+# ---------- 归档 / 临时文件 ----------
+*.zip
+*.7z
+*.tar
+*.tar.gz
+*.tgz
+
+# ---------- 编辑器 / 操作系统 ----------
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ---------- 崩溃转储 ----------
+core
+core.*
+
+# 内部审计记录：含内网地址/内部路径，仅本地保留
+docs/audit/
+
+# 本地重写历史前的备份 / SDK 分发打包产物（不入库）
+_backup/
+dist/

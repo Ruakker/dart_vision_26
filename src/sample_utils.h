@@ -1,3 +1,9 @@
+/*
+ * 本文件派生自 Sophgo / CVITEK TDL SDK 的示例代码（sample/ 目录），
+ * 为适配 DartVision 做了裁剪与修改，函数名沿用上游以方便比对。
+ * 上游代码版权归 Cvitek Co., Ltd. / Sophgo Technologies 所有，
+ * 授权范围见 THIRD_PARTY_NOTICES.md；本文件不适用 DartVision 的 MIT 许可证。
+ */
 #ifndef SAMPLE_UTILS_H_
 #define SAMPLE_UTILS_H_
 #include <pthread.h>

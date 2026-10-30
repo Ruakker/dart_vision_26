@@ -3,7 +3,7 @@
 #include "tool/drv_CRC.h"
 
 //    串口通信协议实现：25 届 HERO 战队电控组
-//    有问题请联系本人，在没看懂源码的情况下不建议自行修改！！！
+//    协议字段与 CRC 校验必须和电控端保持一致，改动前请先阅读 include/tool/drv_cmd_com.h
 
 #if defined _WIN32
 // #include "drv_txt_operation.h"
@@ -27,10 +27,13 @@
 /// <returns></returns>返回成功输出的字节数
 int rt_device_write(rt_device_t serial, int start_postion, char *buffer,
                     int size) {
-  append_to_file("test.txt", buffer + start_postion, size);
-  static int count = 0;
-  count++;
-  printf("写入%d次\n", count);
+  // 说明：本分支仅用于在 PC 上做纯逻辑调试，从不参与板端构建（板端走 __linux__ 分支）。
+  // 原实现把数据写进 test.txt 并缺少 return，会触发 -Wreturn-type 告警，这里补上。
+  (void)serial;
+  (void)buffer;
+  (void)start_postion;
+  (void)size;
+  return size;
 }
 #elif defined __linux__
 // #include "drv_txt_operation.h"

@@ -1,0 +1,7 @@
+# PC 端标定客户端依赖
+# 安装：pip install -r requirements.txt
+#
+# 注意：板端运行的 cam_stream.py 需要板卡镜像自带的 MaixPy（maix 包），
+# 不在这里安装。
+opencv-python>=4.5
+numpy>=1.20

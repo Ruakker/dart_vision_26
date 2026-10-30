@@ -1,0 +1,34 @@
+# 统一使用 LF，避免跨平台换行符污染 diff
+* text=auto eol=lf
+
+# 源码与文档
+*.c      text
+*.h      text
+*.cpp    text
+*.md     text
+*.json   text
+*.yml    text
+*.yaml   text
+*.toml   text
+*.txt    text
+*.cmake  text
+*.sh     text eol=lf
+*.py     text eol=lf
+CMakeLists.txt text
+
+# 二进制资源
+*.cvimodel binary
+*.h264     binary
+*.mp4      binary
+*.png      binary
+*.jpg      binary
+*.jpeg     binary
+*.bmp      binary
+*.bin      binary
+*.a        binary
+*.so       binary
+*.zip      binary
+
+# GitHub 语言统计：SDK 属于第三方代码，文档不计入代码行数
+sdk/**  linguist-vendored
+docs/** linguist-documentation

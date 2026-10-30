@@ -1,5 +1,5 @@
 # 摄像头配置文件
-`/mnt/data/sensor_config.ini`，name 部分
+`/mnt/data/sensor_cfg.ini`，name 部分
 ```
 [source]
 

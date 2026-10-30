@@ -4,27 +4,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-DartVision is a C11 embedded vision and target-tracking application for the LicheeRV Nano / CV181x RISC-V platform. It uses the checked-in Sophgo SDK for camera middleware, hardware video encoding, RTSP, and CVI TDL YOLOv8 NPU inference. The host build cross-compiles a board executable; it is not runnable on the development host.
+DartVision is a C11 embedded vision and target-tracking application for the LicheeRV Nano / CV181x RISC-V platform. It uses the Sophgo SDK (not vendored in git) for camera middleware, hardware video encoding, RTSP, and CVI TDL YOLOv8 NPU inference. The host build cross-compiles a board executable; it is not runnable on the development host.
 
 ## Build
 
-The project requires CMake 3.15+, a RISC-V musl cross-toolchain, and either Ninja or GNU Make. The SDK and OpenCV libraries are vendored under `sdk/`.
+The project requires CMake 3.15+, a RISC-V musl cross-toolchain, and either Ninja or GNU Make. The platform SDK must be placed under `sdk/` first (it is gitignored): run `./scripts/fetch_sdk.sh --from-dir /path/to/sdk`, see the「平台 SDK」section of `README.md`.
 
 ```bash
 export COMPILER=/opt/riscv64-linux-musl/bin
-mkdir -p build
-cd build
-cmake -G Ninja ..
-ninja
+./scripts/fetch_sdk.sh --from-dir /path/to/sdk   # 仅第一次需要
+cmake -S . -B build -G Ninja
+cmake --build build
 ```
 
-For an existing Makefiles build directory, use:
-
-```bash
-cd build
-cmake ..
-make
-```
+With GNU Make instead of Ninja, drop `-G Ninja`. Do not reuse a build directory that was configured with a different compiler: the compilers come from `$COMPILER` and are baked into `CMakeCache.txt`.
 
 The resulting target binary is `build/bin/dart_vision`. `CMakeLists.txt` sets the compilers directly from `$COMPILER`; configure will fail if it is unset or does not contain `riscv64-unknown-linux-musl-gcc` and `g++`.
 
@@ -47,13 +40,13 @@ On the board, invoke a bundled `.cvimodel` or another YOLOv8 model path:
 ./dart_vision model/<model>.cvimodel --raw
 ```
 
-The application reads `/root/config/config.json` and `/root/config/camera_info.json`, communicates through `/dev/ttyS0` at 115200 baud, and expects vendor runtime libraries under `/mnt/system/lib`, `/mnt/system/usr/lib`, and `/mnt/system/usr/lib/3rd`. Sensor selection comes from `/mnt/data/sensor_config.ini`; the documented target sensor is `GCORE_GC4653_MIPI_720P_60FPS_10BIT`.
+The application reads `/root/config/config.json` and `/root/config/camera_info.json`, communicates through `/dev/ttyS0` at 115200 baud, and expects vendor runtime libraries under `/mnt/system/lib`, `/mnt/system/usr/lib`, and `/mnt/system/usr/lib/3rd`. Sensor selection comes from `/mnt/data/sensor_cfg.ini`; the documented target sensor is `GCORE_GC4653_MIPI_720P_60FPS_10BIT`.
 
 Before using UART0 for the protocol, disable its console/getty and set `consoledev=null` in `/boot/uEnv.txt`; see `assets/files/Instruction.md`. That file also documents the board autostart script.
 
 ## Architecture
 
-`src/main.c` owns process startup and teardown. It parses `YOLOV8_MODEL_PATH [--raw]`, loads application, calibration, and Kalman JSON configuration, initializes UART plus CVITEK VI/ISP/VPSS/VENC/RTSP middleware and TDL, then starts four threads.
+`src/main.c` owns process startup and teardown. It parses `YOLOV8_MODEL_PATH [--raw]`, loads application, calibration, and Kalman JSON configuration, initializes UART plus CVITEK VI/ISP/VPSS/VENC/RTSP middleware and TDL, then starts five threads.
 
 The camera pipeline fans out from VPSS group 0:
 
@@ -70,4 +63,5 @@ The camera pipeline fans out from VPSS group 0:
 
 - Treat `sdk/` as the vendor platform SDK. Application work normally belongs in `src/` and `include/dart_vision/`; do not modify SDK code merely to adjust application behavior.
 - `assets/files/root/` mirrors the board's `/root/` deployment layout, including default configuration and model artifacts.
-- `scripts/complete_docx.py` is a document-generation utility and unrelated to the board vision pipeline.
+- `scripts/fetch_sdk.sh` validates or links a platform SDK into `sdk/`; `README.md`'s「平台 SDK」section explains why the SDK is not vendored.
+- `scripts/cam_calib/` holds the chessboard-calibration client (PC) and the board-side frame server; see README "相机标定".

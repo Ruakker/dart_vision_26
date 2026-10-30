@@ -150,53 +150,56 @@ bool load_camera_info(const char *path, CameraParams *camera) {
   if (!path || !camera) {
     return false;
   }
+
   char *buffer = read_file_all(path, NULL);
   if (!buffer) {
     printf("Failed to open camera info file: %s\n", path);
     return false;
   }
 
-  // 仅解析 camera_matrix 的 9 个数字（K 矩阵）
-  const char *p = strstr(buffer, "\"camera_matrix\"");
-  if (!p) {
-    free(buffer);
-    return false;
-  }
-
-  p = strchr(p, '[');
-  if (!p) {
-    free(buffer);
-    return false;
-  }
-
-  double vals[9];
-  int count = 0;
-  while (*p && count < 9) {
-    if ((*p >= '0' && *p <= '9') || *p == '-' || *p == '.') {
-      char *end = NULL;
-      vals[count++] = strtod(p, &end);
-      p = end;
-    } else {
-      p++;
-    }
-  }
-
+  cJSON *root = cJSON_Parse(buffer);
   free(buffer);
-
-  if (count < 6) {
+  if (!root) {
+    printf("Failed to parse camera info JSON: %s\n", path);
     return false;
   }
 
-  camera->fx = (float)vals[0];
-  camera->cx = (float)vals[2];
-  camera->fy = (float)vals[4];
-  camera->cy = (float)vals[5];
+  // camera_matrix 是 OpenCV 输出的 3x3 内参矩阵（行优先）：
+  //   [[fx,  0, cx],
+  //    [ 0, fy, cy],
+  //    [ 0,  0,  1]]
+  // 同时兼容扁平写法 [fx, 0, cx, 0, fy, cy, 0, 0, 1]。
+  bool ok = false;
+  cJSON *matrix = cJSON_GetObjectItem(root, "camera_matrix");
+  if (cJSON_IsArray(matrix) && cJSON_GetArraySize(matrix) == 3 &&
+      cJSON_IsArray(cJSON_GetArrayItem(matrix, 0))) {
+    cJSON *row0 = cJSON_GetArrayItem(matrix, 0);
+    cJSON *row1 = cJSON_GetArrayItem(matrix, 1);
+    cJSON *row2 = cJSON_GetArrayItem(matrix, 2);
+    if (cJSON_IsArray(row1) && cJSON_IsArray(row2) && cJSON_GetArraySize(row0) == 3 &&
+        cJSON_GetArraySize(row1) == 3 && cJSON_GetArraySize(row2) == 3) {
+      camera->fx = (float)cJSON_GetNumberValue(cJSON_GetArrayItem(row0, 0));
+      camera->cx = (float)cJSON_GetNumberValue(cJSON_GetArrayItem(row0, 2));
+      camera->fy = (float)cJSON_GetNumberValue(cJSON_GetArrayItem(row1, 1));
+      camera->cy = (float)cJSON_GetNumberValue(cJSON_GetArrayItem(row1, 2));
+      ok = (camera->fx > 0.0f && camera->fy > 0.0f);
+    }
+  } else if (cJSON_IsArray(matrix) && cJSON_GetArraySize(matrix) >= 6) {
+    camera->fx = (float)cJSON_GetNumberValue(cJSON_GetArrayItem(matrix, 0));
+    camera->cx = (float)cJSON_GetNumberValue(cJSON_GetArrayItem(matrix, 2));
+    camera->fy = (float)cJSON_GetNumberValue(cJSON_GetArrayItem(matrix, 4));
+    camera->cy = (float)cJSON_GetNumberValue(cJSON_GetArrayItem(matrix, 5));
+    ok = (camera->fx > 0.0f && camera->fy > 0.0f);
+  }
 
-  if (camera->fx <= 0.0f || camera->fy <= 0.0f) {
+  cJSON_Delete(root);
+
+  if (!ok) {
+    printf("Invalid \"camera_matrix\" in %s (need 3x3 [[fx,0,cx],[0,fy,cy],[0,0,1]])\n", path);
     return false;
   }
 
-  printf("Camera params loaded: fx=%.3f fy=%.3f cx=%.3f cy=%.3f\n",
-         camera->fx, camera->fy, camera->cx, camera->cy);
+  printf("Camera params loaded: fx=%.3f fy=%.3f cx=%.3f cy=%.3f\n", camera->fx, camera->fy,
+         camera->cx, camera->cy);
   return true;
 }
