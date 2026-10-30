@@ -11,6 +11,7 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "../include/dart_vision/debug.h"
 #include "../include/dart_vision/visual_data.h"
 #include "tool/drv_cmd_com.h"
 
@@ -249,7 +250,7 @@ void *run_uart_send(void *args) {
                         1000000000.0;
 
     average_fps = (average_fps * 9 + 1.0 / time_used) / 10;
-    printf("UART Send Time interval: %f seconds, FPS: %f, Average FPS: %f\n",
+    DV_DEBUG_PRINT("UART Send Time interval: %f seconds, FPS: %f, Average FPS: %f\n",
     time_used, 1.0 / time_used,
             average_fps);
     last_time_stamp = time_stamp;

@@ -26,9 +26,11 @@
 // 例如 1.5f 表示使用“中心点上方 1.5 个框高”作为更新/发送位置
 #define TARGET_UP_OFFSET_HEIGHT_FACTOR 1.5f
 
-// 配置文件路径
-#define CAMERA_INFO_PATH "/root/config/camera_info.json"
-#define APP_CONFIG_PATH "/root/config/config.json"
+// 配置文件路径：默认目录 /root/config，实际路径由 main.c 的 resolve_config_paths() 拼装，
+// 可用环境变量 DART_VISION_CONFIG_DIR 覆盖目录（便于在本地/CI 预演配置解析）
+#define CONFIG_DIR_DEFAULT "/root/config"
+#define CAMERA_INFO_FILENAME "camera_info.json"
+#define APP_CONFIG_FILENAME "config.json"
 
 // 串口默认配置
 #define UART_DEVICE "/dev/ttyS0"

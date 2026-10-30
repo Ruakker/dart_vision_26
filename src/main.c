@@ -82,6 +82,9 @@ static bool parse_args(int argc, char **argv, AppConfig *cfg) {
 static CVI_S32 init_middleware(const AppConfig *cfg, SAMPLE_TDL_MW_CONTEXT *mw_context,
                                SIZE_S *venc_size, CVI_S32 *out_crop_x, CVI_S32 *out_crop_y,
                                CVI_U32 *out_crop_size) {
+  // 目前 VI/VPSS 参数全部来自 sensor ini 与下面的硬编码，cfg 预留给后续可配置化
+  (void)cfg;
+
   SAMPLE_TDL_MW_CONFIG_S stMWConfig = {0};
   CVI_S32 s32Ret = SAMPLE_TDL_Get_VI_Config(&stMWConfig.stViConfig);
   if (s32Ret != CVI_SUCCESS || stMWConfig.stViConfig.s32WorkingViNum <= 0) {
@@ -221,8 +224,6 @@ static CVI_S32 init_middleware(const AppConfig *cfg, SAMPLE_TDL_MW_CONTEXT *mw_c
     printf("CVI_VPSS_SetChnCrop chn1 failed with %#x\n", s32Ret);
     return CVI_FAILURE;
   }
-
-  return CVI_SUCCESS;
 
   return CVI_SUCCESS;
 }
@@ -435,6 +436,17 @@ bool state_copy_feedback(State *state, float data[4], uint64_t *seq) {
   return valid;
 }
 
+// 解析配置文件路径：默认取 CONFIG_DIR_DEFAULT，可用 DART_VISION_CONFIG_DIR 覆盖目录。
+static void resolve_config_paths(char *camera_path, size_t camera_size, char *app_path,
+                                 size_t app_size) {
+  const char *dir = getenv("DART_VISION_CONFIG_DIR");
+  if (!dir || dir[0] == '\0') {
+    dir = CONFIG_DIR_DEFAULT;
+  }
+  snprintf(camera_path, camera_size, "%s/%s", dir, CAMERA_INFO_FILENAME);
+  snprintf(app_path, app_size, "%s/%s", dir, APP_CONFIG_FILENAME);
+}
+
 // 在目录下按同一序号创建录像和日志文件。
 static void open_record_files(const char *dir_path, bool record_enable, bool log_enable,
                               FILE **record_fp, FILE **log_fp) {
@@ -564,8 +576,12 @@ int main(int argc, char **argv) {
     return CVI_TDL_FAILURE;
   }
 
-  // 固定使用指定的相机内参路径
-  cfg.camera_info_path = CAMERA_INFO_PATH;
+  // 相机内参与应用配置的路径（默认 /root/config，可用 DART_VISION_CONFIG_DIR 覆盖）
+  char camera_info_path[512];
+  char app_config_path[512];
+  resolve_config_paths(camera_info_path, sizeof(camera_info_path), app_config_path,
+                       sizeof(app_config_path));
+  cfg.camera_info_path = camera_info_path;
 
   signal(SIGINT, handle_signal);
   signal(SIGTERM, handle_signal);
@@ -582,8 +598,8 @@ int main(int argc, char **argv) {
 
   // 默认配置 + 配置文件覆盖
   config_set_defaults(&cfg);
-  if (!load_app_config(APP_CONFIG_PATH, &cfg)) {
-    printf("Warning: Failed to load app config (%s), using defaults.\n", APP_CONFIG_PATH);
+  if (!load_app_config(app_config_path, &cfg)) {
+    printf("Warning: Failed to load app config (%s), using defaults.\n", app_config_path);
   }
   config_sanitize(&cfg);
   state.optical_axis_yaw_comp_deg = cfg.optical_axis_yaw_comp_deg;
@@ -592,10 +608,10 @@ int main(int argc, char **argv) {
          state.optical_axis_yaw_comp_deg, state.optical_axis_pitch_comp_deg);
 
   // 卡尔曼配置
-  if (!load_kalman_config(APP_CONFIG_PATH, &state.kf_cfg)) {
-    printf("Warning: Failed to load Kalman config (%s), using defaults.\n", APP_CONFIG_PATH);
+  if (!load_kalman_config(app_config_path, &state.kf_cfg)) {
+    printf("Warning: Failed to load Kalman config (%s), using defaults.\n", app_config_path);
   } else {
-    printf("Kalman config loaded: %s\n", APP_CONFIG_PATH);
+    printf("Kalman config loaded: %s\n", app_config_path);
   }
 
   // 录像与串口日志写盘按独立开关初始化，共用输出目录和文件序号。
@@ -651,11 +667,11 @@ int main(int argc, char **argv) {
   state.crop_scale =
       (crop_size > 0 && IMAGE_WIDTH > 0) ? ((float)crop_size / (float)IMAGE_WIDTH) : 1.0f;
 
-  // 关闭 TNR
-  // disable_tnr(0);
-
+  // 当前默认：手动曝光 + 锁定增益（比赛现场光照稳定，固定曝光可让标定结果可复现）。
+  // 若需要恢复自动曝光 / 关闭 TNR，取消下面两行注释即可：
+  //   disable_tnr(0);
+  //   set_auto_exposure_target(0, (CVI_U32)cfg.ae_target_luma);
   set_manual_exposure(0, (CVI_U32)cfg.manual_exposure_time_us);
-  // set_auto_exposure_target(0, (CVI_U32)cfg.ae_target_luma);
 
   cvitdl_handle_t tdl_handle = NULL;
   cvitdl_service_handle_t service_handle = NULL;

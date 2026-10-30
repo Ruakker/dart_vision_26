@@ -6,16 +6,41 @@ import time
 import sys
 import os
 import json
+import argparse
 from datetime import datetime
 
-# ================= 配置区域 =================
-BOARD_IP = '10.129.76.1'
-BOARD_PORT = 8899
-CHESSBOARD_SIZE = (6, 9)    # 棋盘格内角点数量 (行, 列)
-SQUARE_SIZE_MM = 29.2       # 每个格子的边长 (mm)
-# CHESSBOARD_SIZE = (7, 11)    # 棋盘格内角点数量 (行, 列)
-# SQUARE_SIZE_MM = 96.0       # 每个格子的边长 (mm)
+# ================= 默认参数 =================
+DEFAULT_PORT = 8899
+DEFAULT_CHESSBOARD = (6, 9)     # 棋盘格内角点数量 (列, 行)
+DEFAULT_SQUARE_SIZE_MM = 29.2   # 每个格子的边长 (mm)
 # ===========================================
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="摄像头内参标定客户端：从开发板接收图像流，采集棋盘格并计算内参",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    parser.add_argument(
+        "--host",
+        default=os.environ.get("DART_BOARD_IP"),
+        help="开发板 IP 地址，也可用环境变量 DART_BOARD_IP 指定",
+    )
+    parser.add_argument("--port", type=int, default=DEFAULT_PORT,
+                        help="开发板 cam_stream.py 监听的 TCP 端口")
+    parser.add_argument("--cols", type=int, default=DEFAULT_CHESSBOARD[0],
+                        help="棋盘格列方向内角点数")
+    parser.add_argument("--rows", type=int, default=DEFAULT_CHESSBOARD[1],
+                        help="棋盘格行方向内角点数")
+    parser.add_argument("--square-mm", type=float, default=DEFAULT_SQUARE_SIZE_MM,
+                        help="棋盘格单个方格边长（毫米）")
+    parser.add_argument("--output-dir", default=None,
+                        help="标定结果输出目录（默认 calib_output_<时间戳>）")
+    args = parser.parse_args()
+
+    if not args.host:
+        parser.error("缺少开发板地址：请用 --host <IP> 指定，或设置环境变量 DART_BOARD_IP")
+    return args
 
 def recvall(sock, count):
     buf = b''
@@ -37,13 +62,13 @@ def calculate_reprojection_error(objpoints, imgpoints, rvecs, tvecs, mtx, dist):
         mean_error += error
     return mean_error / len(objpoints)
 
-def save_results(mtx, dist, error, img_shape, frames):
+def save_results(mtx, dist, error, img_shape, frames, out_dir=None):
     """
     保存标定结果和图片到带时间戳的文件夹中
     """
     # 1. 创建带时间戳的文件夹
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    save_dir = f"calib_output_{timestamp}"
+    save_dir = out_dir if out_dir else f"calib_output_{timestamp}"
     
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
@@ -64,6 +89,19 @@ def save_results(mtx, dist, error, img_shape, frames):
     with open(json_path, "w") as f:
         json.dump(calib_data, f, indent=4) # indent=4 让文件排版美观可读
 
+    # 2.1 同时输出一份可直接部署到板端 /root/config/ 的 camera_info.json
+    board_camera_info = {
+        "calibration_time": timestamp,
+        "image_width": img_shape[0],
+        "image_height": img_shape[1],
+        "rms_error": error,
+        "camera_matrix": mtx.tolist(),
+        "distortion_coefficients": dist.tolist(),
+    }
+    camera_info_path = os.path.join(save_dir, "camera_info.json")
+    with open(camera_info_path, "w") as f:
+        json.dump(board_camera_info, f, indent=4)
+
     # 3. 保存采集的图片
     print("💾 正在保存采集的图片...")
     for i, frame in enumerate(frames):
@@ -71,12 +109,19 @@ def save_results(mtx, dist, error, img_shape, frames):
         cv2.imwrite(img_name, frame)
     
     print(f"✅ 所有数据已保存至 '{save_dir}/'")
-    print(f"   - 结果文件: calibration_result.json")
+    print(f"   - 结果文件: calibration_result.json / camera_info.json（后者可直接拷到板端）")
     print(f"   - 图片数量: {len(frames)} 张")
 
 def main():
+    args = parse_args()
+    board_ip = args.host
+    board_port = args.port
+    chessboard_size = (args.cols, args.rows)
+    square_size_mm = args.square_mm
+
     print(f"🚀 启动标定客户端")
-    print(f"目标地址: {BOARD_IP}:{BOARD_PORT}")
+    print(f"目标地址: {board_ip}:{board_port}")
+    print(f"棋盘格: {chessboard_size[0]}×{chessboard_size[1]} 内角点, 方格 {square_size_mm} mm")
     
     client_socket = None
 
@@ -86,7 +131,7 @@ def main():
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.settimeout(2.0) 
-            sock.connect((BOARD_IP, BOARD_PORT))
+            sock.connect((board_ip, board_port))
             sock.settimeout(None)
             client_socket = sock
             print("\n✅ 连接成功！")
@@ -99,8 +144,8 @@ def main():
             return
     # -------------------------
 
-    objp = np.zeros((CHESSBOARD_SIZE[0] * CHESSBOARD_SIZE[1], 3), np.float32)
-    objp[:, :2] = np.mgrid[0:CHESSBOARD_SIZE[0], 0:CHESSBOARD_SIZE[1]].T.reshape(-1, 2) * SQUARE_SIZE_MM
+    objp = np.zeros((chessboard_size[0] * chessboard_size[1], 3), np.float32)
+    objp[:, :2] = np.mgrid[0:chessboard_size[0], 0:chessboard_size[1]].T.reshape(-1, 2) * square_size_mm
 
     all_objpoints = [] 
     all_imgpoints = [] 
@@ -138,7 +183,7 @@ def main():
             display_frame = frame.copy()
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             
-            ret, corners = cv2.findChessboardCorners(gray, CHESSBOARD_SIZE, 
+            ret, corners = cv2.findChessboardCorners(gray, chessboard_size, 
                 cv2.CALIB_CB_ADAPTIVE_THRESH + cv2.CALIB_CB_NORMALIZE_IMAGE)
 
             # --- UI ---
@@ -149,7 +194,7 @@ def main():
             if ret:
                 term = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
                 corners2 = cv2.cornerSubPix(gray, corners, (11,11), (-1,-1), term)
-                cv2.drawChessboardCorners(display_frame, CHESSBOARD_SIZE, corners2, ret)
+                cv2.drawChessboardCorners(display_frame, chessboard_size, corners2, ret)
 
             cv2.imshow('Calibration PC Client', display_frame)
             
@@ -205,7 +250,7 @@ def main():
         print(f"\n📊 平均重投影误差: {mean_error:.4f} px")
 
         # 调用保存函数
-        save_results(mtx, dist, ret, img_shape, saved_frames)
+        save_results(mtx, dist, ret, img_shape, saved_frames, args.output_dir)
         
     else:
         print(f"\n⚠️ 样本不足，未计算。")

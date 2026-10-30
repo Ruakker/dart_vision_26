@@ -10,6 +10,7 @@
 #include <core/utils/vpss_helper.h>
 
 #include "../include/dart_vision/config.h"
+#include "../include/dart_vision/debug.h"
 #include "../include/dart_vision/kalman.h"
 #include "../include/dart_vision/uart.h"
 #include "core/core/cvtdl_core_types.h"
@@ -127,7 +128,7 @@ static inline bool is_pixel_green(uint8_t *uv_plane, uint32_t stride, int x, int
 
   uint8_t val_1 = uv_plane[offset];
   uint8_t val_2 = uv_plane[offset + 1];
-  printf("val_1: %d, val_2: %d\n", val_1, val_2);
+  DV_DEBUG_PRINT("val_1: %d, val_2: %d\n", val_1, val_2);
 
   // 两个分量都必须小于阈值
   return (val_1 < GREEN_UV_THRESH && val_2 < GREEN_UV_THRESH);
@@ -567,7 +568,7 @@ void *run_tdl(void *args) {
 
     // 保留详细信息，便于定位
     if (stObjMeta.size != 0) {
-      printf("Obj count: %d\n", stObjMeta.size);
+      DV_DEBUG_PRINT("Obj count: %d\n", stObjMeta.size);
       for (int i = 0; i < stObjMeta.size; i++) {
         int center_x = (int)(stObjMeta.info[i].bbox.x1 +
                              (stObjMeta.info[i].bbox.x2 - stObjMeta.info[i].bbox.x1) / 2);
@@ -582,7 +583,7 @@ void *run_tdl(void *args) {
         float angle_x_deg = angle_x * 180.0f / (float)M_PI - state->optical_axis_yaw_comp_deg;
         float angle_y_deg = angle_y * 180.0f / (float)M_PI - state->optical_axis_pitch_comp_deg;
 
-        printf("  Obj[%d]: Score: %f, BBox: [%f, %f, %f, %f], Angle(deg): [%.2f, %.2f]\n", i,
+        DV_DEBUG_PRINT("  Obj[%d]: Score: %f, BBox: [%f, %f, %f, %f], Angle(deg): [%.2f, %.2f]\n", i,
                stObjMeta.info[i].bbox.score, stObjMeta.info[i].bbox.x1, stObjMeta.info[i].bbox.y1,
                stObjMeta.info[i].bbox.x2, stObjMeta.info[i].bbox.y2, angle_x_deg, angle_y_deg);
       }
