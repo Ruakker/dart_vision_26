@@ -936,7 +936,9 @@ LicheeRV Nano 只提供调试串口与 USB-C 虚拟网卡两种外部接口，�
 
 ### 致谢
 
-HERO 26赛季飞镖组的所有同学。
+感谢 HERO 26 赛季飞镖组的所有同学！
+
+感谢 Sipeed 提供的 LicheeRV Nano 与 GC4653 赞助！
 
 ## 联系方式
 
